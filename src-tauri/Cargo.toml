@@ -1,0 +1,69 @@
+[package]
+name = "tabpilot"
+version = "0.2.0"
+description = "TabPilot — AI Agent 的本地桥梁"
+authors = ["TabApp Team"]
+edition = "2021"
+rust-version = "1.70"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-shell = "2"
+tauri-plugin-deep-link = "2.0.0"
+tauri-plugin-dialog = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["json", "multipart", "stream"] }
+tokio = { version = "1", features = ["full"] }
+log = "0.4"
+env_logger = "0.11"
+url = "2"
+thiserror = "2"
+
+# 新增: Pure Rust Pilot
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+futures-util = "0.3"
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+regex = "1"
+async-trait = "0.1"
+dotenvy = "0.15"
+dirs = "6"
+uuid = { version = "1", features = ["v4"] }
+chrono = "0.4"
+hostname = "0.4"
+portable-pty = "0.8"
+tempfile = "3"
+which = "7"
+
+# browser_core 依赖 (从 agent-browser 引入)
+base64 = "0.22"
+image = "0.25"
+sha2 = "0.10"
+aes-gcm = "0.10"
+similar = "2"
+getrandom = "0.2"
+time = { version = "0.3", features = ["formatting"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+# toolkit 依赖 (从 Aily SO 移植)
+calamine = "0.26"
+csv = "1.3"
+lopdf = "0.34"
+pdf-extract = "0.10"
+imageproc = "0.25"
+ab_glyph = "0.2"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

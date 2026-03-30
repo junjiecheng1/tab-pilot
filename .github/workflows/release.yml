@@ -1,0 +1,254 @@
+# TabPilot 全平台构建 + 发布
+#
+# 触发: 推送 tag (v*) 或手动触发
+# 产物: macOS (.dmg) + Windows (.exe/.msi) + Linux (.AppImage/.deb)
+# 上传: 阿里云 OSS → CDN
+
+name: TabPilot Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: '跳过 OSS 上传'
+        type: boolean
+        default: false
+
+env:
+  APP_NAME: TabPilot
+  OSS_BUCKET: crafto
+  OSS_ENDPOINT: oss-cn-beijing.aliyuncs.com
+  OSS_CDN_DOMAIN: lingostatic.tweet.net.cn
+  OSS_PREFIX: tabpilot/releases
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            bundle: dmg
+            artifact_ext: dmg
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            bundle: dmg
+            artifact_ext: dmg
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundle: msi,nsis
+            artifact_ext: exe
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            bundle: deb,appimage
+            artifact_ext: AppImage
+
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust 编译缓存
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.target }}
+
+      - name: 安装 Linux 依赖
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libssl-dev
+
+      - name: 安装前端依赖
+        working-directory: .
+        run: pnpm install
+
+      - name: 安装 Tauri CLI
+        run: npm i -g @tauri-apps/cli@latest
+
+      - name: 构建 Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: .
+          tauriScript: npx tauri
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundle }}
+
+      - name: 收集产物
+        id: artifacts
+        shell: bash
+        run: |
+          mkdir -p build
+          VERSION=$(grep '^version' src-tauri/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          # macOS (.app → tar.gz)
+          for app_dir in $(find src-tauri/target -name "*.app" -path "*/release/bundle/macos/*" 2>/dev/null); do
+            app_name=$(basename "$app_dir")
+            tar -czf "build/${app_name%.app}_${VERSION}_${{ matrix.target }}.tar.gz" -C "$(dirname "$app_dir")" "$app_name"
+          done
+          find src-tauri/target -name "*.dmg" -exec cp {} build/ \; 2>/dev/null || true
+          # Windows
+          find src-tauri/target -name "*.exe" -path "*/nsis/*" -exec cp {} build/ \; 2>/dev/null || true
+          find src-tauri/target -name "*.msi" -exec cp {} build/ \; 2>/dev/null || true
+          # Linux
+          find src-tauri/target -name "*.AppImage" -exec cp {} build/ \; 2>/dev/null || true
+          find src-tauri/target -name "*.deb" -exec cp {} build/ \; 2>/dev/null || true
+          # 签名文件 (.sig)
+          find src-tauri/target -name "*.sig" -path "*/release/bundle/*" -exec cp {} build/ \; 2>/dev/null || true
+          
+          echo "=== 产物 ==="
+          ls -lh build/
+
+      - name: 上传 GitHub Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabpilot-${{ matrix.target }}
+          path: build/*
+          retention-days: 30
+
+  upload-oss:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_upload }}
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 下载所有产物
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: false
+
+      - name: 安装 Python OSS SDK
+        run: pip install oss2
+
+      - name: 上传到 OSS
+        env:
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+        run: |
+          VERSION=$(grep '^version' src-tauri/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          echo "📦 上传 v${VERSION} 到 OSS..."
+          
+          python3 << PYEOF
+          import oss2, os, glob, hashlib, json
+          from datetime import datetime, timezone
+          
+          ak = os.environ["OSS_ACCESS_KEY_ID"]
+          sk = os.environ["OSS_ACCESS_KEY_SECRET"]
+          bucket_name = "${{ env.OSS_BUCKET }}"
+          endpoint = "${{ env.OSS_ENDPOINT }}"
+          cdn = "${{ env.OSS_CDN_DOMAIN }}"
+          prefix = "${{ env.OSS_PREFIX }}"
+          version = "${VERSION}"
+          
+          auth = oss2.Auth(ak, sk)
+          bucket = oss2.Bucket(auth, f"https://{endpoint}", bucket_name)
+          
+          # 收集所有产物
+          files = []
+          for pattern in ["artifacts/**/*.dmg", "artifacts/**/*.exe", "artifacts/**/*.msi",
+                          "artifacts/**/*.AppImage", "artifacts/**/*.deb"]:
+              files.extend(glob.glob(pattern, recursive=True))
+          
+          uploaded = []
+          for f in files:
+              name = os.path.basename(f)
+              key = f"{prefix}/v{version}/{name}"
+              size = os.path.getsize(f)
+              
+              # SHA512
+              sha = hashlib.sha512()
+              with open(f, "rb") as fh:
+                  for chunk in iter(lambda: fh.read(8192), b""):
+                      sha.update(chunk)
+              sha512 = sha.hexdigest()
+              
+              bucket.put_object_from_file(key, f)
+              url = f"https://{cdn}/{key}"
+              print(f"  OK {name} ({size} bytes) -> {url}")
+              uploaded.append({"name": name, "url": url, "sha512": sha512, "size": size})
+          
+              # 检查是否有对应 .sig 签名文件
+              sig_file = f + ".sig"
+              if not os.path.exists(sig_file):
+                  sig_candidates = glob.glob(f"{os.path.dirname(f)}/*.sig", recursive=False)
+                  sig_file = sig_candidates[0] if sig_candidates else None
+              if sig_file and os.path.exists(sig_file):
+                  sig_key = f"{prefix}/v{version}/{os.path.basename(sig_file)}"
+                  bucket.put_object_from_file(sig_key, sig_file)
+                  with open(sig_file, "r") as sf:
+                      uploaded[-1]["signature"] = sf.read().strip()
+                  print(f"  OK {os.path.basename(sig_file)} (signature)")
+          
+          # Tauri updater 格式: 每个 target-arch 生成 JSON
+          target_arch_map = {
+              "aarch64.dmg": ("darwin", "aarch64"),
+              "x64.dmg": ("darwin", "x86_64"),
+              "x64-setup.exe": ("windows", "x86_64"),
+              "x64-setup.msi": ("windows", "x86_64"),
+              "amd64.AppImage": ("linux", "x86_64"),
+          }
+          
+          for suffix, (target, arch) in target_arch_map.items():
+              matching = [u for u in uploaded if u["name"].endswith(suffix)]
+              if not matching:
+                  continue
+              m = matching[0]
+              updater_json = {
+                  "version": version,
+                  "notes": f"TabPilot v{version}",
+                  "pub_date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+                  "url": m["url"],
+                  "signature": m.get("signature", ""),
+              }
+              json_key = f"{prefix}/{target}-{arch}.json"
+              bucket.put_object(json_key, json.dumps(updater_json, indent=2).encode())
+              print(f"  OK {target}-{arch}.json -> https://{cdn}/{json_key}")
+          
+          print(f"Upload done! {len(uploaded)} files")
+          PYEOF
+
+      - name: 输出下载链接
+        run: |
+          VERSION=$(grep '^version' src-tauri/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          CDN="https://${{ env.OSS_CDN_DOMAIN }}/${{ env.OSS_PREFIX }}"
+          echo ""
+          echo "📥 下载链接:"
+          echo "   macOS (ARM):   ${CDN}/v${VERSION}/TabPilot_${VERSION}_aarch64.dmg"
+          echo "   macOS (Intel): ${CDN}/v${VERSION}/TabPilot_${VERSION}_x64.dmg"
+          echo "   Windows:       ${CDN}/v${VERSION}/TabPilot_${VERSION}_x64-setup.exe"
+          echo "   Linux:         ${CDN}/v${VERSION}/TabPilot_${VERSION}_amd64.AppImage"
+          echo ""
+          echo "   更新元数据 (Tauri JSON):"
+          echo "                  ${CDN}/darwin-aarch64.json"
+          echo "                  ${CDN}/darwin-x86_64.json"
+          echo "                  ${CDN}/windows-x86_64.json"
+          echo "                  ${CDN}/linux-x86_64.json"

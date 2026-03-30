@@ -1,0 +1,1 @@
+{"main-capability":{"identifier":"main-capability","description":"TabPilot 主能力声明","local":true,"windows":["main"],"permissions":["core:default","shell:allow-open","dialog:allow-open","dialog:default","autostart:allow-enable","autostart:allow-disable","autostart:allow-is-enabled","updater:default"]}}

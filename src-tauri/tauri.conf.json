@@ -1,0 +1,55 @@
+{
+  "productName": "TabPilot",
+  "version": "0.2.0",
+  "identifier": "com.tabapp.pilot",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5174",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build:frontend"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "TabPilot",
+        "width": 800,
+        "height": 600,
+        "minWidth": 800,
+        "minHeight": 600,
+        "resizable": true,
+        "decorations": true,
+        "visible": true,
+        "fullscreen": false,
+        "maximizable": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' http://localhost:8080 ws://localhost:8080 https://www.syxc.art wss://www.syxc.art"
+    }
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    },
+    "deep-link": {
+      "desktop": {
+        "schemes": ["tabpilot"]
+      }
+    },
+    "updater": {
+      "endpoints": [
+        "https://crafto.oss-cn-beijing.aliyuncs.com/tabpilot/releases/{{target}}-{{arch}}.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZFNjlGN0YxMjM2QzFCMDYKUldRR0cyd2o4ZmRwL3F2Vkw3bGtENWlYZnpWSmlwQnpuU0tMVThjT2xEUktOeW4zYlZ0OHJlVHoK"
+    }
+  },
+  "bundle": {
+    "createUpdaterArtifacts": true,
+    "icon": [
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ]
+  }
+}

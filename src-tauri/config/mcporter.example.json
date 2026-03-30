@@ -1,0 +1,22 @@
+{
+  "servers": {
+    "filesystem": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/xxx/docs"],
+      "env": {}
+    },
+    "database": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost:5432/mydb"],
+      "env": {
+        "NODE_ENV": "production"
+      }
+    },
+    "remote-api": {
+      "transport": "http",
+      "url": "http://localhost:8088/mcp"
+    }
+  }
+}
