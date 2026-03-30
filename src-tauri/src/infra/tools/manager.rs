@@ -131,20 +131,25 @@ impl ToolsManager {
             return self.oss_url.clone();
         }
         
-        let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-        let version_url = format!("{}/{platform}/{name}-version.txt?_t={ts}", self.oss_url, platform=platform_key().unwrap_or(""));
-        
-        match reqwest::get(&version_url).await {
-            Ok(resp) if resp.status().is_success() => {
-                if let Ok(v) = resp.text().await {
-                    let v = v.trim();
-                    if !v.is_empty() {
-                        log::info!("[Tools] 解析 {name} 动态版本: {v}");
-                        return format!("{}/history/{}", self.oss_url, v);
+        if let Ok(platform_key) = platform_key() {
+            let version_url = format!(
+                "https://crafto.oss-cn-beijing.aliyuncs.com/tools/tabpilot-tools/{platform}/{name}-version.txt",
+                platform=platform_key, name=name
+            );
+            
+            log::info!("[Tools] 探测 {name} 动态版本: {version_url}");
+            match reqwest::get(&version_url).await {
+                Ok(resp) if resp.status().is_success() => {
+                    if let Ok(v) = resp.text().await {
+                        let v = v.trim();
+                        if !v.is_empty() {
+                            log::info!("[Tools] 解析 {name} 动态版本: {v}");
+                            return format!("{}/history/{}", self.oss_url, v);
+                        }
                     }
                 }
+                _ => log::warn!("[Tools] 无法获取 {name} 的动态版本号，回退到默认路径"),
             }
-            _ => log::warn!("[Tools] 无法获取 {name} 的动态版本号，回退到默认路径"),
         }
         
         self.oss_url.clone()
