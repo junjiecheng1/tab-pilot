@@ -79,12 +79,19 @@ impl MessageRouter {
         }
     }
 
-    /// 参数全量记录
+    /// 参数安全摘要（脱敏 env 等字段）
     fn preview_params(params: &serde_json::Value) -> String {
         if params.is_null() {
             return String::new();
         }
-        serde_json::to_string(params).unwrap_or_default()
+        
+        let mut safe_params = params.clone();
+        if let Some(obj) = safe_params.as_object_mut() {
+            if obj.contains_key("env") {
+                obj.insert("env".to_string(), serde_json::json!("[HIDDEN]"));
+            }
+        }
+        serde_json::to_string(&safe_params).unwrap_or_default()
     }
 
     /// 结果全量记录
