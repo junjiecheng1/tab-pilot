@@ -62,16 +62,18 @@ enum ToolKind {
 ///       ├── jq.exe
 ///       ├── yq.exe
 ///       └── markitdown.tar.gz
-fn tool_list() -> Vec<(&'static str, ToolKind)> {
+// 第二个参数: ToolKind
+// 第三个参数: 是否采用动态版本探测 (true: 去 OSS 读 {name}-version.txt 获取最新版并回源 history 目录，false: 直接下载默认目录)
+fn tool_list() -> Vec<(&'static str, ToolKind, bool)> {
     vec![
         // ── 通用 CLI (单文件) ────────
-        ("rg", ToolKind::Binary),         // ripgrep: 快速内容搜索
-        ("fd", ToolKind::Binary),         // fd-find: 快速文件搜索
-        ("jq", ToolKind::Binary),         // JSON 处理
-        ("yq", ToolKind::Binary),         // YAML 处理
+        ("rg", ToolKind::Binary, false),
+        ("fd", ToolKind::Binary, false),
+        ("jq", ToolKind::Binary, false),
+        ("yq", ToolKind::Binary, false),
         // ── 打包工具 (目录) ──────────
-        ("markitdown", ToolKind::Archive), // Office 文档转 Markdown (docx/xlsx/pptx/pdf)
-        ("lark-cli", ToolKind::Archive),   // 飞书 CLI
+        ("markitdown", ToolKind::Archive, false),
+        ("lark-cli", ToolKind::Archive, true), // 动态版本探测
     ]
 }
 
@@ -152,7 +154,26 @@ impl ToolsManager {
         std::fs::create_dir_all(&self.tools_dir)
             .map_err(|e| format!("创建 tools 目录失败: {e}"))?;
 
-        for (name, kind) in tool_list() {
+        for (name, kind, dynamic_version) in tool_list() {
+            let mut prefix = self.oss_url.clone();
+
+            if dynamic_version {
+                let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+                let version_url = format!("{}/{platform}/{name}-version.txt?_t={ts}", self.oss_url);
+                match reqwest::get(&version_url).await {
+                    Ok(resp) if resp.status().is_success() => {
+                        if let Ok(v) = resp.text().await {
+                            let v = v.trim();
+                            if !v.is_empty() {
+                                log::info!("[Tools] 解析 {name} 动态版本: {v}");
+                                prefix = format!("{}/history/{}", self.oss_url, v);
+                            }
+                        }
+                    }
+                    _ => log::warn!("[Tools] 无法获取 {name} 的动态版本号，回退到默认路径"),
+                }
+            }
+
             match kind {
                 ToolKind::Binary => {
                     let bin_name = if cfg!(windows) {
@@ -167,7 +188,7 @@ impl ToolsManager {
                         continue;
                     }
 
-                    let url = format!("{}/{platform}/{bin_name}", self.oss_url);
+                    let url = format!("{}/{platform}/{bin_name}", prefix);
                     log::info!("[Tools] 下载 {name}: {url}");
 
                     match self.download_binary(&url, &bin_path).await {
@@ -196,7 +217,7 @@ impl ToolsManager {
                     // 确保 dest_dir 存在
                     let _ = std::fs::create_dir_all(&dest_dir);
 
-                    let url = format!("{}/{platform}/{name}.tar.gz", self.oss_url);
+                    let url = format!("{}/{platform}/{name}.tar.gz", prefix);
                     log::info!("[Tools] 下载 {name} (archive): {url}");
 
                     match self.download_and_extract(&url, &dest_dir).await {

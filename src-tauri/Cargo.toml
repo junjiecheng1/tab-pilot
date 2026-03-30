@@ -1,42 +1,42 @@
 [package]
 name = "tabpilot"
-version = "0.4.4"
+version = "0.4.6"
 description = "TabPilot — AI Agent 的本地桥梁"
 authors = ["TabApp Team"]
 edition = "2021"
-rust-version = "1.70"
+rust-version = "0.4.6"
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
-serde = { version = "1.0", features = ["derive"] }
+tauri-build = { version = "0.4.6"
+serde = { version = "0.4.6"
 serde_json = "1.0"
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri = { version = "0.4.6"
 tauri-plugin-shell = "2"
 tauri-plugin-deep-link = "2.0.0"
 tauri-plugin-dialog = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
-serde = { version = "1", features = ["derive"] }
+serde = { version = "0.4.6"
 serde_json = "1"
-reqwest = { version = "0.12", features = ["json", "multipart", "stream"] }
-tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.4.6"
+tokio = { version = "0.4.6"
 log = "0.4"
 env_logger = "0.11"
 url = "2"
 thiserror = "2"
 
 # 新增: Pure Rust Pilot
-tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+tokio-tungstenite = { version = "0.4.6"
 futures-util = "0.3"
-sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+sqlx = { version = "0.4.6"
 regex = "1"
 async-trait = "0.1"
 dotenvy = "0.15"
 dirs = "6"
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "0.4.6"
 chrono = "0.4"
 hostname = "0.4"
 portable-pty = "0.8"
@@ -50,8 +50,8 @@ sha2 = "0.10"
 aes-gcm = "0.10"
 similar = "2"
 getrandom = "0.2"
-time = { version = "0.3", features = ["formatting"] }
-zip = { version = "2", default-features = false, features = ["deflate"] }
+time = { version = "0.4.6"
+zip = { version = "0.4.6"
 
 # toolkit 依赖 (从 Aily SO 移植)
 calamine = "0.26"
