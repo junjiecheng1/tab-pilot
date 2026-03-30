@@ -181,7 +181,7 @@ pub async fn send_message(
         "msg_type": msg_type,
         "content": content,
     });
-    let params = [("receive_id_type", receive_id_type)];
+
     let url = format!("/im/v1/messages?receive_id_type={receive_id_type}");
     client.post(&url, &body).await
 }
@@ -226,10 +226,6 @@ pub async fn p2p_chat_id(
     user_id: &str,
     id_type: &str,
 ) -> Result<Value> {
-    let body = json!({
-        "id_list": [user_id],
-    });
-    let url = format!("/im/v1/batch_messages/read_user?id_type={id_type}");
     // 飞书没有直接的 p2p API，用 list + filter 实现
     let chats: PageData<Value> = client
         .get(

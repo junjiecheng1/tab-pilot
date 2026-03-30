@@ -35,7 +35,7 @@ fn main() {
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
             // 获取数据目录 (dev/prod 隔离)
-            let mut data_dir = app.path().app_data_dir()
+            let data_dir = app.path().app_data_dir()
                 .unwrap_or_else(|_| {
                     dirs::data_dir()
                         .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
