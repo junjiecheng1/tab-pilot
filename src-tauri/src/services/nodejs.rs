@@ -75,7 +75,11 @@ impl NodeJsService {
             let nm_src = rt.join("node_modules");
             let nm_dst = tmp_dir.path().join("node_modules");
             if nm_src.exists() && !nm_dst.exists() {
+                #[cfg(unix)]
                 let _ = std::os::unix::fs::symlink(&nm_src, &nm_dst);
+                
+                #[cfg(windows)]
+                let _ = std::os::windows::fs::symlink_dir(&nm_src, &nm_dst);
             }
         }
 
