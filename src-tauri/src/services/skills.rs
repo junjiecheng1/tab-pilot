@@ -202,8 +202,9 @@ impl SkillService {
                 let oss_url = params["oss_url"]
                     .as_str()
                     .ok_or_else(|| SkillError::BadRequest("缺少 oss_url".into()))?;
+                let dest_dir = params["dest_dir"].as_str().map(|s| s.to_string());
                     
-                self.sync_remote(skill_id, version, oss_url).await?;
+                self.sync_remote(skill_id, version, oss_url, dest_dir).await?;
                 Ok(serde_json::json!({ "status": "synced" }))
             }
             "list" => {
@@ -251,9 +252,11 @@ impl SkillService {
         skill_id: &str,
         version: &str,
         oss_url: &str,
+        dest_dir: Option<String>,
     ) -> Result<(), SkillError> {
-        let skills_path = std::env::var("AIO_SKILLS_PATH")
-            .unwrap_or_else(|_| "/tmp/skills".to_string());
+        let skills_path = dest_dir.unwrap_or_else(|| {
+            std::env::var("AIO_SKILLS_PATH").unwrap_or_else(|_| "/tmp/skills".to_string())
+        });
         
         let root = PathBuf::from(&skills_path.trim_matches('"').trim_matches('\''));
         if !root.exists() {
