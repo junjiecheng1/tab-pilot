@@ -186,12 +186,26 @@ impl SkillService {
     // ── WS handler ────────────────────────────────────────
 
     /// 通过 WS 路由分发的统一 handler
-    pub fn handle(
+    pub async fn handle(
         &mut self,
         action: &str,
         params: serde_json::Value,
     ) -> Result<serde_json::Value, SkillError> {
         match action {
+            "sync" => {
+                let skill_id = params["skill_id"]
+                    .as_str()
+                    .ok_or_else(|| SkillError::BadRequest("缺少 skill_id".into()))?;
+                let version = params["version"]
+                    .as_str()
+                    .ok_or_else(|| SkillError::BadRequest("缺少 version".into()))?;
+                let oss_url = params["oss_url"]
+                    .as_str()
+                    .ok_or_else(|| SkillError::BadRequest("缺少 oss_url".into()))?;
+                    
+                self.sync_remote(skill_id, version, oss_url).await?;
+                Ok(serde_json::json!({ "status": "synced" }))
+            }
             "list" => {
                 let names: Option<Vec<String>> = params
                     .get("names")
@@ -231,6 +245,62 @@ impl SkillService {
     }
 
     // ── 内部实现 ──────────────────────────────────────────
+
+    pub async fn sync_remote(
+        &mut self,
+        skill_id: &str,
+        version: &str,
+        oss_url: &str,
+    ) -> Result<(), SkillError> {
+        let skills_path = std::env::var("AIO_SKILLS_PATH")
+            .unwrap_or_else(|_| "/tmp/skills".to_string());
+        
+        let root = PathBuf::from(&skills_path.trim_matches('"').trim_matches('\''));
+        if !root.exists() {
+            std::fs::create_dir_all(&root).map_err(|e| SkillError::Io(format!("创建目录失败: {e}")))?;
+        }
+        
+        let target_dir = root.join(skill_id);
+        
+        log::info!("[Skills] 下载并部署技能包 {} v{} -> {}", skill_id, version, target_dir.display());
+        
+        let resp = reqwest::get(oss_url).await.map_err(|e| SkillError::Io(format!("下载失败: {e}")))?;
+        let bytes = resp.bytes().await.map_err(|e| SkillError::Io(format!("读取内容失败: {e}")))?;
+        
+        let tmp_path = std::env::temp_dir().join(format!("tab_dl_skill_{}.tar.gz", skill_id));
+        std::fs::write(&tmp_path, &bytes).map_err(|e| SkillError::Io(format!("写入临时文件失败: {e}")))?;
+        
+        if !target_dir.exists() {
+            std::fs::create_dir_all(&target_dir).map_err(|e| SkillError::Io(format!("创建目标目录失败: {e}")))?;
+        }
+        
+        // 借用 tar 解压内容到原地
+        let status = tokio::process::Command::new("tar")
+            .arg("-xzf")
+            .arg(&tmp_path)
+            .arg("-C")
+            .arg(&target_dir)
+            .status()
+            .await
+            .map_err(|e| SkillError::Io(format!("TAR 解析失败: {e}")))?;
+            
+        let _ = std::fs::remove_file(&tmp_path);
+        if !status.success() {
+            return Err(SkillError::BadRequest("解压失败，返回非 0 状态".into()));
+        }
+        
+        // 写入版本标志信息
+        let meta_file = target_dir.join(".meta.json");
+        let _ = std::fs::write(&meta_file, serde_json::json!({
+            "skill_id": skill_id,
+            "version": version
+        }).to_string());
+        
+        // 自动注册挂载
+        let res = self.register_directory(&target_dir.to_string_lossy())?;
+        log::info!("[Skills] {} 已部署完毕, 当前已挂载技能数目: {}", skill_id, res.count);
+        Ok(())
+    }
 
     /// 从环境变量自动挂载
     fn auto_mount_from_env(&mut self) {

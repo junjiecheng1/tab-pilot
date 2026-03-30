@@ -115,6 +115,7 @@ impl AppServices {
                     .write()
                     .await
                     .handle(action, params)
+                    .await
                     .map_err(|e| ServiceError::internal(e.to_string()))
             }
             "editor" => self.editor_manager.handle(action, params).await,
