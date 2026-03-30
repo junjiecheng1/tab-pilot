@@ -165,7 +165,7 @@ impl ShellService {
                     params["session_id"].as_str().map(String::from),
                     params["shell"].as_str().map(String::from),
                     params["working_dir"].as_str().map(String::from),
-                    params.get("environment").and_then(|v| serde_json::from_value(v.clone()).ok()),
+                    params.get("environment").or_else(|| params.get("env")).and_then(|v| serde_json::from_value(v.clone()).ok()),
                 ).await
             }
             "exec" => {
@@ -231,7 +231,10 @@ impl ShellService {
             let cwd = params["exec_dir"].as_str()
                 .or_else(|| params["cwd"].as_str())
                 .map(String::from);
-            let result = self.create_session(None, None, cwd, None).await?;
+            let env = params.get("env")
+                .or_else(|| params.get("environment"))
+                .and_then(|v| serde_json::from_value(v.clone()).ok());
+            let result = self.create_session(None, None, cwd, env).await?;
             let sid = result["session_id"]
                 .as_str()
                 .ok_or_else(|| ServiceError::internal("auto-create session failed"))?;
