@@ -254,9 +254,12 @@ impl SkillService {
         oss_url: &str,
         dest_dir: Option<String>,
     ) -> Result<(), SkillError> {
-        let skills_path = dest_dir.unwrap_or_else(|| {
-            std::env::var("AIO_SKILLS_PATH").unwrap_or_else(|_| "/tmp/skills".to_string())
-        });
+        let skills_path = match dest_dir {
+            Some(p) => p,
+            None => std::env::var("AIO_SKILLS_PATH").map_err(|_| {
+                SkillError::BadRequest("未提供 dest_dir，且系统未配置 AIO_SKILLS_PATH 参数".to_string())
+            })?,
+        };
         
         let root = PathBuf::from(&skills_path.trim_matches('"').trim_matches('\''));
         if !root.exists() {
@@ -264,6 +267,21 @@ impl SkillService {
         }
         
         let target_dir = root.join(skill_id);
+        let meta_file = target_dir.join(".meta.json");
+        // 校验缓存: 如果已有该版本, 则直接挂载
+        if meta_file.exists() {
+            if let Ok(content) = std::fs::read_to_string(&meta_file) {
+                if let Ok(meta) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if meta.get("version").and_then(|v| v.as_str()) == Some(version) {
+                        log::info!("[Skills] {} v{} 已在 {}，无需重新下载", skill_id, version, target_dir.display());
+                        if !self.skills.contains_key(skill_id) {
+                            self.register_directory(&target_dir.to_string_lossy())?;
+                        }
+                        return Ok(());
+                    }
+                }
+            }
+        }
         
         log::info!("[Skills] 下载并部署技能包 {} v{} -> {}", skill_id, version, target_dir.display());
         
@@ -298,6 +316,9 @@ impl SkillService {
             "skill_id": skill_id,
             "version": version
         }).to_string());
+        
+        // 覆盖卸载旧缓存
+        let _ = self.delete(skill_id);
         
         // 自动注册挂载
         let res = self.register_directory(&target_dir.to_string_lossy())?;
