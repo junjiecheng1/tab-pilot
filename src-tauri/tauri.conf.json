@@ -41,7 +41,7 @@
       "endpoints": [
         "https://crafto.oss-cn-beijing.aliyuncs.com/tabpilot/releases/{{target}}-{{arch}}.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERBRjJCNzQ1MkU1NzczMEIKUldRTGMxY3VSYmZ5Mm9BbWxWWDUrSzdIMTlGMk5XQmo1WUVGbXBISG5WSjVxMnhQeVB6MWdvNy8K"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZDOTM2MzUyQkU4M0EwNjQKUldSa29JTytVbU9UL0VjRU0vZlRydVpraDNJNmR3RUI5Q1E5WUR6dkxpd0VhV1FtbjRQSW1JalAK"
     }
   },
   "bundle": {
