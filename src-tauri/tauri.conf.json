@@ -1,6 +1,6 @@
 {
   "productName": "TabPilot",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "identifier": "com.tabapp.pilot",
   "build": {
     "frontendDist": "../dist",
