@@ -108,7 +108,7 @@ impl ToolsManager {
     pub fn path_dirs(&self) -> Vec<PathBuf> {
         let mut dirs = vec![self.tools_dir.clone()];
         // Archive 类型工具的子目录也加入 PATH
-        for (name, kind) in tool_list() {
+        for (name, kind, _) in tool_list() {
             if matches!(kind, ToolKind::Archive) {
                 let sub_dir = self.tools_dir.join(name);
                 if sub_dir.exists() {
@@ -121,7 +121,7 @@ impl ToolsManager {
 
     /// 所有工具是否就绪 (逐个检查)
     pub fn is_ready(&self) -> bool {
-        for (name, kind) in tool_list() {
+        for (name, kind, _) in tool_list() {
             let exists = match kind {
                 ToolKind::Binary => {
                     let bin_name = if cfg!(windows) { format!("{name}.exe") } else { name.to_string() };
