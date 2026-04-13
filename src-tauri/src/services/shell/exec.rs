@@ -57,9 +57,20 @@ pub async fn exec_in_session(
             .begin_command(command)
             .map_err(ServiceError::bad_request)?;
         let wrapped = format!("{command}\n{}", command_wrapper_line(&command_state.marker));
-        locked
-            .write_command(&wrapped)
-            .map_err(ServiceError::internal)?;
+        if let Err(write_err) = locked.write_command(&wrapped) {
+            // 管道关闭 (Windows os error 232 等): shell 已退出，立即返回已有输出
+            log::warn!("[Shell] write failed, shell likely exited: {write_err}");
+            let output = locked.collector.take();
+            let interrupted = locked
+                .interrupt_current_command(output)
+                .unwrap_or(command_state);
+            return Ok(command_payload(
+                &locked.id,
+                &interrupted,
+                locked.active,
+                true,
+            ));
+        }
         log::info!(
             "[Shell] exec start: sid={}, cmd_id={}, timeout={}s",
             &locked.id[..locked.id.len().min(8)],

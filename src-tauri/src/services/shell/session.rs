@@ -158,14 +158,19 @@ impl ShellSession {
 
     /// 写入命令到 PTY
     pub fn write_command(&mut self, command: &str) -> Result<(), String> {
+        self.refresh_active();
+        if !self.active {
+            return Err("shell session 已结束，无法写入".to_string());
+        }
         let cmd_line = if command.ends_with('\n') {
             command.to_string()
         } else {
             format!("{command}\n")
         };
-        self.writer
-            .write_all(cmd_line.as_bytes())
-            .map_err(|e| format!("写入失败: {e}"))?;
+        if let Err(e) = self.writer.write_all(cmd_line.as_bytes()) {
+            self.active = false;
+            return Err(format!("写入失败 (shell 可能已退出): {e}"));
+        }
         let _ = self.writer.flush();
         self.last_used = Instant::now();
         Ok(())
@@ -173,9 +178,14 @@ impl ShellSession {
 
     /// 写入任意文本
     pub fn write_raw(&mut self, text: &str) -> Result<usize, String> {
-        self.writer
-            .write_all(text.as_bytes())
-            .map_err(|e| format!("写入失败: {e}"))?;
+        self.refresh_active();
+        if !self.active {
+            return Err("shell session 已结束，无法写入".to_string());
+        }
+        if let Err(e) = self.writer.write_all(text.as_bytes()) {
+            self.active = false;
+            return Err(format!("写入失败 (shell 可能已退出): {e}"));
+        }
         let _ = self.writer.flush();
         self.last_used = Instant::now();
         Ok(text.len())
