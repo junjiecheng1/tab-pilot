@@ -31,6 +31,25 @@ fn main() {
             None,
         ))
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // Windows: 协议回调会启动新进程, 这里把 URL 转发给已有实例
+            log::info!("[SingleInstance] 收到二次启动, argv: {:?}", argv);
+            for arg in &argv {
+                if arg.starts_with("tabpilot://") {
+                    let url = arg.clone();
+                    let handle = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        ui::deeplink::handle_deep_link(handle, &format!("\"{}\"" , url)).await;
+                    });
+                    break;
+                }
+            }
+            // 显示已有窗口
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
