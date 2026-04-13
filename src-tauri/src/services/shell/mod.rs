@@ -49,12 +49,26 @@ impl ShellService {
         environment: Option<HashMap<String, String>>,
     ) -> ServiceResult {
         let sid = session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        let shell_cmd = shell
-            .unwrap_or_else(|| std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string()));
+        let shell_cmd = shell.unwrap_or_else(|| {
+            std::env::var("SHELL").unwrap_or_else(|_| {
+                if cfg!(target_os = "windows") {
+                    "cmd.exe".to_string()
+                } else {
+                    "/bin/bash".to_string()
+                }
+            })
+        });
         let cwd = PathBuf::from(working_dir.unwrap_or_else(|| {
             std::env::var("WORKSPACE")
                 .or_else(|_| std::env::var("HOME"))
-                .unwrap_or_else(|_| "/tmp".to_string())
+                .or_else(|_| std::env::var("USERPROFILE"))
+                .unwrap_or_else(|_| {
+                    if cfg!(target_os = "windows") {
+                        std::env::var("TEMP").unwrap_or_else(|_| "C:\\".to_string())
+                    } else {
+                        "/tmp".to_string()
+                    }
+                })
         }));
 
         {

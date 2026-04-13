@@ -77,8 +77,11 @@ impl ShellSession {
             })
             .map_err(|e| format!("PTY 创建失败: {e}"))?;
 
-        let mut cmd = portable_pty::CommandBuilder::new(shell_cmd);
-        cmd.arg("-i");
+        let mut cmd = portable_pty::CommandBuilder::new(&shell_cmd);
+        // -i (interactive) 仅对 bash/zsh 有意义，Windows cmd.exe 不支持
+        if !cfg!(target_os = "windows") {
+            cmd.arg("-i");
+        }
         cmd.cwd(cwd);
 
         if let Some(env) = environment {

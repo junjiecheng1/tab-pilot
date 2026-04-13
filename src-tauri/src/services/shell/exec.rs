@@ -283,5 +283,11 @@ fn normalize_output(raw_output: &str) -> String {
 }
 
 fn command_wrapper_line(marker: &str) -> String {
-    format!("printf '\\n{}:%s\\n' \"$?\"", marker)
+    if cfg!(target_os = "windows") {
+        // Windows cmd.exe: echo marker:exitcode
+        format!("echo {}:%errorlevel%", marker)
+    } else {
+        // Unix bash/zsh: printf marker:exitcode
+        format!("printf '\\n{}:%s\\n' \"$?\"", marker)
+    }
 }

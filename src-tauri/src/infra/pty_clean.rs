@@ -79,6 +79,14 @@ fn is_noise_line(line: &str) -> bool {
         return true;
     }
 
+    // ── Windows cmd.exe banner ──────────────
+    if line.starts_with("Microsoft Windows")
+        || line.starts_with("(c) Microsoft Corporation")
+        || line.starts_with("(C) Microsoft Corporation")
+    {
+        return true;
+    }
+
     // ── Shell prompt ──────────────────────────
     // bash-3.2$ cmd | bash$ cmd
     if line.starts_with("bash") && line.contains("$ ") {
@@ -90,6 +98,14 @@ fn is_noise_line(line: &str) -> bool {
     }
     // zsh prompt
     if line.ends_with('%') && line.len() < 80 {
+        return true;
+    }
+    // Windows cmd prompt: C:\Users\xxx> 或 D:\workspace>
+    if line.len() > 2
+        && line.as_bytes().get(1) == Some(&b':')
+        && line.as_bytes().get(2) == Some(&b'\\')
+        && line.ends_with('>')
+    {
         return true;
     }
 
