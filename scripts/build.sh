@@ -2,8 +2,8 @@
 # TabPilot 一键构建 + 安装
 #
 # Rust 自动选择环境:
-#   cargo tauri dev   → 加载 .env (开发)
-#   cargo tauri build → 加载 .env.production (生产)
+#   pnpm exec tauri dev   → 加载 .env (开发)
+#   pnpm exec tauri build → 加载 .env.production (生产)
 #
 # 用法:
 #   bash scripts/build.sh           # 生产环境构建
@@ -52,7 +52,7 @@ echo ""
 echo "② 构建中 (前端 → Rust → Bundle)..."
 cd "$PROJ_DIR"
 TAURI_SIGNING_PRIVATE_KEY="${TAURI_SIGNING_PRIVATE_KEY:-$(cat ~/.tauri/tabpilot.key 2>/dev/null || echo '')}" \
-  cargo tauri build --bundles app,dmg 2>&1
+  pnpm exec tauri build --bundles app,dmg 2>&1
 
 # 4. 收集产物到 build/
 echo ""

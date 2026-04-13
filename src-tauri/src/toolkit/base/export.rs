@@ -139,9 +139,10 @@ pub async fn export_tables(
 /// 规范化字段值
 fn normalize_field_value(v: &Value) -> Value {
     match v {
-        Value::Object(obj) if obj.contains_key("text") => {
-            obj.get("text").cloned().unwrap_or(Value::String(String::new()))
-        }
+        Value::Object(obj) if obj.contains_key("text") => obj
+            .get("text")
+            .cloned()
+            .unwrap_or(Value::String(String::new())),
         Value::Array(arr) => {
             let normalized: Vec<Value> = arr
                 .iter()

@@ -2,8 +2,8 @@
 //
 // Agent: bash("tab-diagram flowchart --data '{...}'")
 
-use serde_json::{json, Value};
 use crate::core::error::{ServiceError, ServiceResult};
+use serde_json::{json, Value};
 
 pub fn dispatch(args: &[String]) -> ServiceResult {
     let subcmd = args.first().map(|s| s.as_str()).unwrap_or("help");

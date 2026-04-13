@@ -2,16 +2,17 @@
 //
 // Agent: bash("tab-skillhub explore")
 
-use serde_json::json;
 use crate::core::error::{ServiceError, ServiceResult};
 use crate::toolkit::client::TabClient;
+use serde_json::json;
 
 pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
     let subcmd = args.first().map(|s| s.as_str()).unwrap_or("help");
 
     match subcmd {
         "explore" => {
-            let result = super::explore(client).await
+            let result = super::explore(client)
+                .await
                 .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
@@ -21,30 +22,35 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(20);
-            let result = super::search(client, &query, page_size).await
+            let result = super::search(client, &query, page_size)
+                .await
                 .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "list" | "installed" => {
-            let result = super::list_installed(client).await
+            let result = super::list_installed(client)
+                .await
                 .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "inspect" => {
             let skill_id = named_arg(args, "--id")?;
-            let result = super::inspect(client, &skill_id).await
+            let result = super::inspect(client, &skill_id)
+                .await
                 .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "install" => {
             let skill_id = named_arg(args, "--id")?;
-            let result = super::install(client, &skill_id).await
+            let result = super::install(client, &skill_id)
+                .await
                 .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "uninstall" => {
             let skill_id = named_arg(args, "--id")?;
-            let result = super::uninstall(client, &skill_id).await
+            let result = super::uninstall(client, &skill_id)
+                .await
                 .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
@@ -52,7 +58,9 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             "output": HELP,
             "exit_code": 0,
         })),
-        _ => Err(ServiceError::bad_request(format!("tab-skillhub: 未知命令 '{subcmd}'"))),
+        _ => Err(ServiceError::bad_request(format!(
+            "tab-skillhub: 未知命令 '{subcmd}'"
+        ))),
     }
 }
 

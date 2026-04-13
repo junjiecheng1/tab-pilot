@@ -6,10 +6,10 @@
 //   protocol.rs    ← JSON-RPC 编解码
 //   config.rs      ← 连接配置
 
-pub mod dispatch;
-pub mod connector;
-pub mod protocol;
 pub mod config;
+pub mod connector;
+pub mod dispatch;
+pub mod protocol;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -20,13 +20,13 @@ use config::PilotConfig;
 use connector::Connector;
 use dispatch::MessageRouter;
 
-use crate::ui::auth::AuthManager;
-use crate::infra::store::LocalStore;
-use crate::infra::guard::ToolGuard;
 use crate::infra::audit::AuditLog;
+use crate::infra::guard::ToolGuard;
 use crate::infra::mcp::McpBridge;
 use crate::infra::runtime;
+use crate::infra::store::LocalStore;
 use crate::services::AppServices;
+use crate::ui::auth::AuthManager;
 
 /// 全局状态 — 注入到所有 Tauri Commands
 pub struct AppState {
@@ -48,7 +48,11 @@ impl AppState {
         log::info!(
             "[AppState] 初始化 → {} ({})",
             config.server_host,
-            if config.is_local() { "开发" } else { "生产" }
+            if config.is_local() {
+                "开发"
+            } else {
+                "生产"
+            }
         );
 
         // 2. 存储
@@ -74,7 +78,7 @@ impl AppState {
         // 7. 运行时管理
         let _rt = Arc::new(runtime::RuntimeManager::new(&data_dir));
 
-        // 7.1 CLI 工具下载 (rg, fd, jq, yq) — 后台非阻塞
+        // 7.1 CLI 工具下载 (rg, fd, jq, yq, douyin-cli 等) — 后台非阻塞
         {
             let data_dir_clone = data_dir.clone();
             let oss_url = config.tools_oss_url.clone();
@@ -95,10 +99,7 @@ impl AppState {
             .and_then(|p| p.parent())
             .map(|p| p.join("config"))
             .unwrap_or_else(|| data_dir.join("config"));
-        let mcp = Arc::new(RwLock::new(McpBridge::load(
-            &config_dir,
-            Some(_rt.clone()),
-        )));
+        let mcp = Arc::new(RwLock::new(McpBridge::load(&config_dir, Some(_rt.clone()))));
 
         // 9. AppServices (唯一业务层)
         let app = Arc::new(AppServices::new(guard.clone(), audit.clone()));

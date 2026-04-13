@@ -16,7 +16,7 @@ pub fn platform_key() -> Result<&'static str, String> {
 pub enum ToolKind {
     /// 单文件二进制 (rg, fd, jq, yq)
     Binary,
-    /// tar.gz 打包目录 (markitdown)
+    /// tar.gz 打包目录 (markitdown, douyin-cli)
     Archive,
     /// tar.gz 形式下载的单文件二进制 (lark-cli)
     TarGzDirect,
@@ -32,6 +32,7 @@ pub fn tool_list() -> Vec<(&'static str, ToolKind, bool)> {
         ("yq", ToolKind::Binary, false),
         // ── 打包工具 (目录) ──────────
         ("markitdown", ToolKind::Archive, false),
+        ("douyin-cli", ToolKind::Archive, true), // 动态版本探测
         ("lark-cli", ToolKind::TarGzDirect, true), // 动态版本探测
     ]
 }

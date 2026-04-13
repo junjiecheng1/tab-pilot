@@ -3,10 +3,10 @@
 // 通过 engine/cdp 模块，使用 Page.printToPDF 将 HTML 渲染为 PDF
 // 需要浏览器引擎已启动 (Chrome/LightPanda)
 
-use std::path::Path;
-use serde_json::{json, Value};
-use crate::toolkit::client::TabClientError;
 use crate::engine::cdp::client::CdpClient;
+use crate::toolkit::client::TabClientError;
+use serde_json::{json, Value};
+use std::path::Path;
 
 /// HTML → PDF (通过 CDP Page.printToPDF)
 ///
@@ -22,14 +22,16 @@ pub async fn html_to_pdf(
 
     // 1. 写临时 HTML 文件
     let tmp_dir = std::env::temp_dir().join("tab-html2pdf");
-    tokio::fs::create_dir_all(&tmp_dir).await
+    tokio::fs::create_dir_all(&tmp_dir)
+        .await
         .map_err(|e| TabClientError::Other(format!("创建临时目录失败: {e}")))?;
 
     let html_path = if Path::new(html_source).exists() {
         Path::new(html_source).to_path_buf()
     } else {
         let p = tmp_dir.join("input.html");
-        tokio::fs::write(&p, html_source.as_bytes()).await
+        tokio::fs::write(&p, html_source.as_bytes())
+            .await
             .map_err(|e| TabClientError::Other(format!("写入 HTML 失败: {e}")))?;
         p
     };
@@ -51,31 +53,30 @@ pub async fn html_to_pdf(
     });
 
     // 3. 连接 CDP
-    let cdp_url = std::env::var("CDP_WS_URL")
-        .unwrap_or_else(|_| "ws://127.0.0.1:9222".to_string());
+    let cdp_url = std::env::var("CDP_WS_URL").unwrap_or_else(|_| "ws://127.0.0.1:9222".to_string());
 
-    let client = CdpClient::connect(&cdp_url).await
+    let client = CdpClient::connect(&cdp_url)
+        .await
         .map_err(|e| TabClientError::Other(format!("CDP 连接失败: {e}")))?;
 
     // 导航到 HTML 页面
-    let _nav = client.send_command(
-        "Page.navigate",
-        Some(json!({"url": file_url})),
-        None,
-    ).await.map_err(|e| TabClientError::Other(format!("导航失败: {e}")))?;
+    let _nav = client
+        .send_command("Page.navigate", Some(json!({"url": file_url})), None)
+        .await
+        .map_err(|e| TabClientError::Other(format!("导航失败: {e}")))?;
 
     // 等待页面加载
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
     // 打印为 PDF
-    let pdf_result: Value = client.send_command(
-        "Page.printToPDF",
-        Some(print_params),
-        None,
-    ).await.map_err(|e| TabClientError::Other(format!("打印 PDF 失败: {e}")))?;
+    let pdf_result: Value = client
+        .send_command("Page.printToPDF", Some(print_params), None)
+        .await
+        .map_err(|e| TabClientError::Other(format!("打印 PDF 失败: {e}")))?;
 
     // 4. 解码 base64 并写入文件
-    let base64_data = pdf_result.get("data")
+    let base64_data = pdf_result
+        .get("data")
         .and_then(|v: &Value| v.as_str())
         .ok_or_else(|| TabClientError::Other("CDP 未返回 PDF 数据".into()))?;
 
@@ -84,7 +85,8 @@ pub async fn html_to_pdf(
         .decode(base64_data)
         .map_err(|e| TabClientError::Other(format!("base64 解码失败: {e}")))?;
 
-    tokio::fs::write(output, &pdf_bytes).await
+    tokio::fs::write(output, &pdf_bytes)
+        .await
         .map_err(|e| TabClientError::Other(format!("写入 PDF 失败: {e}")))?;
 
     // 清理

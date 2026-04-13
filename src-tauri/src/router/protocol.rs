@@ -199,9 +199,13 @@ where
 
     /// 发送 MCP 工具更新
     pub async fn mcp_updated(&mut self, mcp_tools: serde_json::Value) {
-        self.notify(method::MCP_UPDATED, serde_json::json!({
-            "mcp_tools": mcp_tools,
-        })).await;
+        self.notify(
+            method::MCP_UPDATED,
+            serde_json::json!({
+                "mcp_tools": mcp_tools,
+            }),
+        )
+        .await;
     }
 
     /// 发送 JSON-RPC 响应 (工具调用结果)

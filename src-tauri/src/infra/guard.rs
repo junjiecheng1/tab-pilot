@@ -2,10 +2,10 @@
 //
 // 三层判断: 黑名单 → 白名单 → 已记住 → 按模式
 
+use log;
 use regex::Regex;
 use std::collections::HashSet;
 use std::path::PathBuf;
-use log;
 
 /// 安全判断结果
 #[derive(Debug, Clone, PartialEq)]
@@ -39,11 +39,33 @@ const BLACKLIST_PATTERNS: &[&str] = &[
 
 /// 白名单命令前缀
 const WHITELIST_PREFIXES: &[&str] = &[
-    "ls", "cat", "pwd", "whoami", "echo", "date", "uname",
-    "git status", "git log", "git diff", "git branch", "git show",
-    "node --version", "python --version", "npm --version",
-    "which", "type", "file", "head", "tail", "wc",
-    "find", "grep", "tree", "env", "printenv", "dir",
+    "ls",
+    "cat",
+    "pwd",
+    "whoami",
+    "echo",
+    "date",
+    "uname",
+    "git status",
+    "git log",
+    "git diff",
+    "git branch",
+    "git show",
+    "node --version",
+    "python --version",
+    "npm --version",
+    "which",
+    "type",
+    "file",
+    "head",
+    "tail",
+    "wc",
+    "find",
+    "grep",
+    "tree",
+    "env",
+    "printenv",
+    "dir",
 ];
 
 /// 安全门控
@@ -69,10 +91,7 @@ impl ToolGuard {
         };
 
         let home = dirs::home_dir().unwrap_or_default();
-        let mut protected: Vec<String> = raw_paths
-            .iter()
-            .map(|p| p.to_string())
-            .collect();
+        let mut protected: Vec<String> = raw_paths.iter().map(|p| p.to_string()).collect();
         protected.push(format!("{}/.ssh", home.display()));
         protected.push(format!("{}/.gnupg", home.display()));
 
@@ -97,23 +116,25 @@ impl ToolGuard {
 
     /// 从 SQLite 加载已记住命令
     pub async fn load_remembered(&mut self) {
-        let db = match sqlx::SqlitePool::connect(
-            &format!("sqlite:{}?mode=rwc", self.db_path.display())
-        ).await {
-            Ok(db) => db,
-            Err(e) => {
-                log::warn!("[Guard] 数据库连接失败: {e}");
-                return;
-            }
-        };
+        let db =
+            match sqlx::SqlitePool::connect(&format!("sqlite:{}?mode=rwc", self.db_path.display()))
+                .await
+            {
+                Ok(db) => db,
+                Err(e) => {
+                    log::warn!("[Guard] 数据库连接失败: {e}");
+                    return;
+                }
+            };
 
         let _ = sqlx::query(
             "CREATE TABLE IF NOT EXISTS remembered_commands (prefix TEXT PRIMARY KEY, added_at REAL)"
         ).execute(&db).await;
 
-        if let Ok(rows) = sqlx::query_as::<_, (String,)>(
-            "SELECT prefix FROM remembered_commands"
-        ).fetch_all(&db).await {
+        if let Ok(rows) = sqlx::query_as::<_, (String,)>("SELECT prefix FROM remembered_commands")
+            .fetch_all(&db)
+            .await
+        {
             self.remembered = rows.into_iter().map(|r| r.0).collect();
             log::info!("[Guard] 加载 {} 条已记住命令", self.remembered.len());
         }
@@ -121,27 +142,34 @@ impl ToolGuard {
 
     /// 记住命令前缀
     pub async fn remember(&mut self, command: &str) {
-        let prefix = command.split_whitespace().next().unwrap_or(command).to_string();
+        let prefix = command
+            .split_whitespace()
+            .next()
+            .unwrap_or(command)
+            .to_string();
         self.remembered.insert(prefix.clone());
 
-        if let Ok(db) = sqlx::SqlitePool::connect(
-            &format!("sqlite:{}?mode=rwc", self.db_path.display())
-        ).await {
+        if let Ok(db) =
+            sqlx::SqlitePool::connect(&format!("sqlite:{}?mode=rwc", self.db_path.display())).await
+        {
             let now = chrono::Utc::now().timestamp() as f64;
-            let _ = sqlx::query(
-                "INSERT OR REPLACE INTO remembered_commands VALUES (?, ?)"
-            ).bind(&prefix).bind(now).execute(&db).await;
+            let _ = sqlx::query("INSERT OR REPLACE INTO remembered_commands VALUES (?, ?)")
+                .bind(&prefix)
+                .bind(now)
+                .execute(&db)
+                .await;
         }
     }
 
     /// 清空已记住命令
     pub async fn clear_remembered(&mut self) {
         self.remembered.clear();
-        if let Ok(db) = sqlx::SqlitePool::connect(
-            &format!("sqlite:{}?mode=rwc", self.db_path.display())
-        ).await {
+        if let Ok(db) =
+            sqlx::SqlitePool::connect(&format!("sqlite:{}?mode=rwc", self.db_path.display())).await
+        {
             let _ = sqlx::query("DELETE FROM remembered_commands")
-                .execute(&db).await;
+                .execute(&db)
+                .await;
         }
     }
 
@@ -153,11 +181,13 @@ impl ToolGuard {
     /// 移除一条已记住命令
     pub async fn remove_remembered(&mut self, prefix: &str) {
         self.remembered.remove(prefix);
-        if let Ok(db) = sqlx::SqlitePool::connect(
-            &format!("sqlite:{}?mode=rwc", self.db_path.display())
-        ).await {
+        if let Ok(db) =
+            sqlx::SqlitePool::connect(&format!("sqlite:{}?mode=rwc", self.db_path.display())).await
+        {
             let _ = sqlx::query("DELETE FROM remembered_commands WHERE prefix = ?")
-                .bind(prefix).execute(&db).await;
+                .bind(prefix)
+                .execute(&db)
+                .await;
         }
     }
 
@@ -226,7 +256,11 @@ impl ToolGuard {
             "conservative" => GuardDecision::Confirm,
             "trust" => GuardDecision::Allow,
             _ => {
-                if is_write { GuardDecision::Confirm } else { GuardDecision::Allow }
+                if is_write {
+                    GuardDecision::Confirm
+                } else {
+                    GuardDecision::Allow
+                }
             }
         }
     }

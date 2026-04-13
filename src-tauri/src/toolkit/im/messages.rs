@@ -116,9 +116,6 @@ pub async fn reply_message(
 }
 
 /// 获取单条消息
-pub async fn get_message(
-    client: &TabClient,
-    message_id: &str,
-) -> Result<Value> {
+pub async fn get_message(client: &TabClient, message_id: &str) -> Result<Value> {
     client::im::get_message(client, message_id).await
 }

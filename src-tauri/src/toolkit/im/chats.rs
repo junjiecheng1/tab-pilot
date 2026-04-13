@@ -17,13 +17,7 @@ pub async fn list_chats(
     let mut page_count = 0;
 
     loop {
-        let page = client::im::list_chats(
-            client,
-            page_size,
-            page_token.as_deref(),
-            None,
-        )
-        .await?;
+        let page = client::im::list_chats(client, page_size, page_token.as_deref(), None).await?;
 
         all_chats.extend(page.items);
         page_count += 1;
@@ -41,22 +35,13 @@ pub async fn list_chats(
 }
 
 /// 搜索群聊
-pub async fn search_chats(
-    client: &TabClient,
-    query: &str,
-    page_size: i32,
-) -> Result<Vec<Value>> {
+pub async fn search_chats(client: &TabClient, query: &str, page_size: i32) -> Result<Vec<Value>> {
     let mut all_chats = Vec::new();
     let mut page_token: Option<String> = None;
 
     loop {
-        let page = client::im::search_chats(
-            client,
-            query,
-            page_size,
-            page_token.as_deref(),
-        )
-        .await?;
+        let page =
+            client::im::search_chats(client, query, page_size, page_token.as_deref()).await?;
 
         all_chats.extend(page.items);
 
@@ -87,13 +72,8 @@ pub async fn list_chat_members(
     let mut page_token: Option<String> = None;
 
     loop {
-        let page = client::im::list_chat_members(
-            client,
-            chat_id,
-            page_size,
-            page_token.as_deref(),
-        )
-        .await?;
+        let page = client::im::list_chat_members(client, chat_id, page_size, page_token.as_deref())
+            .await?;
 
         all_members.extend(page.items);
 
@@ -111,10 +91,6 @@ pub async fn list_chat_members(
 
 /// 获取与用户的单聊 chat_id
 /// 移植自: aily_im/commands/chats.py p2p_chatid
-pub async fn p2p_chat_id(
-    client: &TabClient,
-    user_id: &str,
-    id_type: &str,
-) -> Result<Value> {
+pub async fn p2p_chat_id(client: &TabClient, user_id: &str, id_type: &str) -> Result<Value> {
     client::im::p2p_chat_id(client, user_id, id_type).await
 }

@@ -121,7 +121,10 @@ pub async fn delete_field(
         let fname = f.get("field_name").and_then(|v| v.as_str()).unwrap_or("");
         if fname == field_name {
             field_id = f.get("field_id").and_then(|v| v.as_str()).map(String::from);
-            is_primary = f.get("is_primary").and_then(|v| v.as_bool()).unwrap_or(false);
+            is_primary = f
+                .get("is_primary")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             break;
         }
     }

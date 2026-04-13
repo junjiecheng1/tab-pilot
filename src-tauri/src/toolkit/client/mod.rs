@@ -5,10 +5,10 @@
 
 pub mod auth;
 pub mod bitable;
-pub mod im;
 pub mod calendar;
 pub mod doc;
 pub mod drive;
+pub mod im;
 pub mod user;
 
 use std::time::Duration;
@@ -223,20 +223,12 @@ impl TabClient {
     }
 
     /// GET 请求（返回原始 JSON Value）
-    pub async fn get_raw(
-        &self,
-        path: &str,
-        params: &[(&str, &str)],
-    ) -> Result<Value> {
+    pub async fn get_raw(&self, path: &str, params: &[(&str, &str)]) -> Result<Value> {
         self.get::<Value>(path, params).await
     }
 
     /// POST 请求（返回原始 JSON Value）
-    pub async fn post_raw(
-        &self,
-        path: &str,
-        body: &impl Serialize,
-    ) -> Result<Value> {
+    pub async fn post_raw(&self, path: &str, body: &impl Serialize) -> Result<Value> {
         self.post::<Value>(path, body).await
     }
 
@@ -258,10 +250,8 @@ impl TabClient {
             }
 
             // 转换为 &str 对
-            let str_params: Vec<(&str, &str)> = params
-                .iter()
-                .map(|(k, v)| (*k, v.as_str()))
-                .collect();
+            let str_params: Vec<(&str, &str)> =
+                params.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
             let page: PageData<T> = self.get(path, &str_params).await?;
             all_items.extend(page.items);
@@ -280,10 +270,7 @@ impl TabClient {
 
     // ── 内部 ──────────────────────────────
 
-    async fn parse_response<T: DeserializeOwned + Default>(
-        &self,
-        resp: Response,
-    ) -> Result<T> {
+    async fn parse_response<T: DeserializeOwned + Default>(&self, resp: Response) -> Result<T> {
         let feishu: FeishuResponse<T> = resp.json().await?;
         feishu.into_result()
     }

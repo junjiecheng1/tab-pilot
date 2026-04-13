@@ -3,5 +3,5 @@
 // 移植自: aily_doc/ (363行)
 
 pub mod comments;
-pub mod info;
 pub mod dispatch;
+pub mod info;

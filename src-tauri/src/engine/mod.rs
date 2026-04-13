@@ -6,26 +6,26 @@
 // 核心入口: BrowserState + execute_command
 // 注: 大量函数通过 execute_command 动态分发调用, 静态分析报 dead_code 是误报
 
-pub mod cdp;
 pub mod browser;
-pub mod element;
-pub mod snapshot;
-pub mod interaction;
-pub mod screenshot;
-pub mod stream;
-pub mod network;
+pub mod cdp;
 pub mod cookies;
+pub mod diff;
+pub mod element;
+pub mod install;
+pub mod interaction;
+pub mod network;
+pub mod screenshot;
+pub mod snapshot;
 pub mod state;
 pub mod storage;
-pub mod diff;
-pub mod install;
+pub mod stream;
 pub mod webdriver;
 
-use serde_json::{json, Value};
 use browser::BrowserManager;
 use cdp::chrome::LaunchOptions;
 use element::RefMap;
 use screenshot::ScreenshotOptions;
+use serde_json::{json, Value};
 use snapshot::SnapshotOptions;
 use stream::StreamServer;
 
@@ -73,60 +73,63 @@ pub async fn execute_command(cmd: &Value, state: &mut BrowserState) -> Value {
 
     let result = match action {
         // Chrome 生命周期
-        "launch"     => handle_launch(cmd, state).await,
-        "close"      => handle_close(state).await,
+        "launch" => handle_launch(cmd, state).await,
+        "close" => handle_close(state).await,
 
         // 导航
-        "navigate"   => handle_navigate(cmd, state).await,
-        "back"       => handle_back(state).await,
-        "forward"    => handle_forward(state).await,
-        "reload"     => handle_reload(state).await,
+        "navigate" => handle_navigate(cmd, state).await,
+        "back" => handle_back(state).await,
+        "forward" => handle_forward(state).await,
+        "reload" => handle_reload(state).await,
 
         // 观察
-        "snapshot"   => handle_snapshot(cmd, state).await,
+        "snapshot" => handle_snapshot(cmd, state).await,
         "screenshot" => handle_screenshot(cmd, state).await,
-        "url"        => handle_url(state).await,
-        "title"      => handle_title(state).await,
+        "url" => handle_url(state).await,
+        "title" => handle_title(state).await,
 
         // 交互
-        "click"      => handle_click(cmd, state).await,
-        "dblclick"   => handle_dblclick(cmd, state).await,
-        "fill"       => handle_fill(cmd, state).await,
-        "type"       => handle_type(cmd, state).await,
-        "press"      => handle_press(cmd, state).await,
-        "hover"      => handle_hover(cmd, state).await,
-        "scroll"     => handle_scroll(cmd, state).await,
-        "select"     => handle_select(cmd, state).await,
-        "check"      => handle_check(cmd, state).await,
-        "uncheck"    => handle_uncheck(cmd, state).await,
+        "click" => handle_click(cmd, state).await,
+        "dblclick" => handle_dblclick(cmd, state).await,
+        "fill" => handle_fill(cmd, state).await,
+        "type" => handle_type(cmd, state).await,
+        "press" => handle_press(cmd, state).await,
+        "hover" => handle_hover(cmd, state).await,
+        "scroll" => handle_scroll(cmd, state).await,
+        "select" => handle_select(cmd, state).await,
+        "check" => handle_check(cmd, state).await,
+        "uncheck" => handle_uncheck(cmd, state).await,
 
         // 等待
-        "wait"       => handle_wait(cmd).await,
+        "wait" => handle_wait(cmd).await,
 
         // 元素查询
-        "gettext"    => handle_gettext(cmd, state).await,
-        "isvisible"  => handle_isvisible(cmd, state).await,
+        "gettext" => handle_gettext(cmd, state).await,
+        "isvisible" => handle_isvisible(cmd, state).await,
 
         // 视觉
-        "highlight"  => handle_highlight(cmd, state).await,
+        "highlight" => handle_highlight(cmd, state).await,
 
         // Tab 管理
-        "tab_list"   => handle_tab_list(state).await,
-        "tab_new"    => handle_tab_new(cmd, state).await,
+        "tab_list" => handle_tab_list(state).await,
+        "tab_new" => handle_tab_new(cmd, state).await,
         "tab_switch" => handle_tab_switch(cmd, state).await,
-        "tab_close"  => handle_tab_close(cmd, state).await,
+        "tab_close" => handle_tab_close(cmd, state).await,
 
         // JS 执行
-        "evaluate"   => handle_evaluate(cmd, state).await,
+        "evaluate" => handle_evaluate(cmd, state).await,
 
         // Agent 操作状态
         "agent_start" => {
             state.agent_active = true;
             // 推送到 BrowserView
             if let Some(ref ss) = state.stream_server {
-                let _ = ss.broadcast_frame(&serde_json::json!({
-                    "type": "agent_state", "active": true
-                }).to_string());
+                let _ = ss.broadcast_frame(
+                    &serde_json::json!({
+                        "type": "agent_state", "active": true
+                    })
+                    .to_string(),
+                );
             }
             // 注入蓝色呼吸边框到 Chrome 页面
             if let Some(ref mgr) = state.browser {
@@ -142,20 +145,26 @@ pub async fn execute_command(cmd: &Value, state: &mut BrowserState) -> Value {
                     document.body.appendChild(el);
                 })()
                 "#;
-                let _ = mgr.client.send_command(
-                    "Runtime.evaluate",
-                    Some(json!({"expression": inject_js})),
-                    Some(&state.session_id),
-                ).await;
+                let _ = mgr
+                    .client
+                    .send_command(
+                        "Runtime.evaluate",
+                        Some(json!({"expression": inject_js})),
+                        Some(&state.session_id),
+                    )
+                    .await;
             }
             Ok(json!({"agent_active": true}))
-        },
+        }
         "agent_stop" => {
             state.agent_active = false;
             if let Some(ref ss) = state.stream_server {
-                let _ = ss.broadcast_frame(&serde_json::json!({
-                    "type": "agent_state", "active": false
-                }).to_string());
+                let _ = ss.broadcast_frame(
+                    &serde_json::json!({
+                        "type": "agent_state", "active": false
+                    })
+                    .to_string(),
+                );
             }
             // 移除 Chrome 页面上的蓝色边框
             if let Some(ref mgr) = state.browser {
@@ -165,14 +174,17 @@ pub async fn execute_command(cmd: &Value, state: &mut BrowserState) -> Value {
                     .forEach(function(id){ var e=document.getElementById(id); if(e) e.remove(); });
                 })()
                 "#;
-                let _ = mgr.client.send_command(
-                    "Runtime.evaluate",
-                    Some(json!({"expression": remove_js})),
-                    Some(&state.session_id),
-                ).await;
+                let _ = mgr
+                    .client
+                    .send_command(
+                        "Runtime.evaluate",
+                        Some(json!({"expression": remove_js})),
+                        Some(&state.session_id),
+                    )
+                    .await;
             }
             Ok(json!({"agent_active": false}))
-        },
+        }
 
         _ => Err(format!("未知 action: {}", action)),
     };
@@ -203,7 +215,9 @@ fn error_response(msg: &str) -> Value {
 
 macro_rules! require_browser {
     ($state:expr) => {{
-        let mgr = $state.browser.as_ref()
+        let mgr = $state
+            .browser
+            .as_ref()
             .ok_or_else(|| "浏览器未启动".to_string())?;
         let sid = mgr.active_session_id()?.to_string();
         (mgr, sid)
@@ -237,8 +251,11 @@ async fn try_connect_existing(profile_dir: &std::path::Path) -> Option<BrowserMa
         std::net::TcpStream::connect_timeout(
             &addr.parse().unwrap(),
             std::time::Duration::from_millis(500),
-        ).is_ok()
-    }).await.unwrap_or(false);
+        )
+        .is_ok()
+    })
+    .await
+    .unwrap_or(false);
 
     if !reachable {
         // 旧文件残留, 清理
@@ -394,7 +411,9 @@ async fn handle_navigate(cmd: &Value, state: &mut BrowserState) -> Result<Value,
 
 async fn handle_back(state: &mut BrowserState) -> Result<Value, String> {
     let (mgr, sid) = require_browser!(state);
-    mgr.client.send_command_no_params("Page.goBack", Some(&sid)).await?;
+    mgr.client
+        .send_command_no_params("Page.goBack", Some(&sid))
+        .await?;
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     let url = mgr.get_url().await.unwrap_or_default();
     Ok(json!({"url": url}))
@@ -402,7 +421,9 @@ async fn handle_back(state: &mut BrowserState) -> Result<Value, String> {
 
 async fn handle_forward(state: &mut BrowserState) -> Result<Value, String> {
     let (mgr, sid) = require_browser!(state);
-    mgr.client.send_command_no_params("Page.goForward", Some(&sid)).await?;
+    mgr.client
+        .send_command_no_params("Page.goForward", Some(&sid))
+        .await?;
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     let url = mgr.get_url().await.unwrap_or_default();
     Ok(json!({"url": url}))
@@ -410,7 +431,9 @@ async fn handle_forward(state: &mut BrowserState) -> Result<Value, String> {
 
 async fn handle_reload(state: &mut BrowserState) -> Result<Value, String> {
     let (mgr, sid) = require_browser!(state);
-    mgr.client.send_command_no_params("Page.reload", Some(&sid)).await?;
+    mgr.client
+        .send_command_no_params("Page.reload", Some(&sid))
+        .await?;
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     let url = mgr.get_url().await.unwrap_or_default();
     Ok(json!({"url": url}))
@@ -420,9 +443,8 @@ async fn handle_snapshot(_cmd: &Value, state: &mut BrowserState) -> Result<Value
     let (mgr, sid) = require_browser!(state);
 
     let options = SnapshotOptions::default();
-    let snapshot_text = snapshot::take_snapshot(
-        &mgr.client, &sid, &options, &mut state.ref_map, None,
-    ).await?;
+    let snapshot_text =
+        snapshot::take_snapshot(&mgr.client, &sid, &options, &mut state.ref_map, None).await?;
 
     let url = mgr.get_url().await.unwrap_or_default();
     let title = mgr.get_title().await.unwrap_or_default();
@@ -463,7 +485,15 @@ async fn handle_click(cmd: &Value, state: &mut BrowserState) -> Result<Value, St
     let _ = interaction::highlight(&mgr.client, &sid, &state.ref_map, selector).await;
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-    interaction::click(&mgr.client, &sid, &state.ref_map, selector, button, click_count).await?;
+    interaction::click(
+        &mgr.client,
+        &sid,
+        &state.ref_map,
+        selector,
+        button,
+        click_count,
+    )
+    .await?;
     Ok(json!({"clicked": selector}))
 }
 
@@ -489,11 +519,22 @@ async fn handle_fill(cmd: &Value, state: &mut BrowserState) -> Result<Value, Str
 async fn handle_type(cmd: &Value, state: &mut BrowserState) -> Result<Value, String> {
     let (mgr, sid) = require_browser!(state);
     let selector = get_str(cmd, "selector").ok_or("缺少 selector 参数")?;
-    let text = get_str(cmd, "text").or_else(|| get_str(cmd, "value")).ok_or("缺少 text 参数")?;
+    let text = get_str(cmd, "text")
+        .or_else(|| get_str(cmd, "value"))
+        .ok_or("缺少 text 参数")?;
     let clear = cmd.get("clear").and_then(|v| v.as_bool()).unwrap_or(false);
     let delay = cmd.get("delay").and_then(|v| v.as_u64());
 
-    interaction::type_text(&mgr.client, &sid, &state.ref_map, selector, text, clear, delay).await?;
+    interaction::type_text(
+        &mgr.client,
+        &sid,
+        &state.ref_map,
+        selector,
+        text,
+        clear,
+        delay,
+    )
+    .await?;
     Ok(json!({"typed": selector, "text": text}))
 }
 
@@ -516,7 +557,15 @@ async fn handle_scroll(cmd: &Value, state: &mut BrowserState) -> Result<Value, S
     let selector = cmd.get("selector").and_then(|v| v.as_str());
     let delta_x = cmd.get("delta_x").and_then(|v| v.as_f64()).unwrap_or(0.0);
     let delta_y = cmd.get("delta_y").and_then(|v| v.as_f64()).unwrap_or(500.0);
-    interaction::scroll(&mgr.client, &sid, &state.ref_map, selector, delta_x, delta_y).await?;
+    interaction::scroll(
+        &mgr.client,
+        &sid,
+        &state.ref_map,
+        selector,
+        delta_x,
+        delta_y,
+    )
+    .await?;
     Ok(json!({"scrolled": true, "delta_x": delta_x, "delta_y": delta_y}))
 }
 
@@ -524,7 +573,14 @@ async fn handle_select(cmd: &Value, state: &mut BrowserState) -> Result<Value, S
     let (mgr, sid) = require_browser!(state);
     let selector = get_str(cmd, "selector").ok_or("缺少 selector 参数")?;
     let value = get_str(cmd, "value").ok_or("缺少 value 参数")?;
-    interaction::select_option(&mgr.client, &sid, &state.ref_map, selector, &[value.to_string()]).await?;
+    interaction::select_option(
+        &mgr.client,
+        &sid,
+        &state.ref_map,
+        selector,
+        &[value.to_string()],
+    )
+    .await?;
     Ok(json!({"selected": selector, "value": value}))
 }
 
@@ -555,16 +611,21 @@ async fn handle_gettext(cmd: &Value, state: &mut BrowserState) -> Result<Value, 
         element::get_element_text(&mgr.client, &sid, &state.ref_map, sel).await?
     } else {
         // 获取整页文本
-        let result: cdp::types::EvaluateResult = mgr.client.send_command_typed(
-            "Runtime.evaluate",
-            &cdp::types::EvaluateParams {
-                expression: "document.body?.innerText || ''".to_string(),
-                return_by_value: Some(true),
-                await_promise: Some(false),
-            },
-            Some(&sid),
-        ).await?;
-        result.result.value
+        let result: cdp::types::EvaluateResult = mgr
+            .client
+            .send_command_typed(
+                "Runtime.evaluate",
+                &cdp::types::EvaluateParams {
+                    expression: "document.body?.innerText || ''".to_string(),
+                    return_by_value: Some(true),
+                    await_promise: Some(false),
+                },
+                Some(&sid),
+            )
+            .await?;
+        result
+            .result
+            .value
             .and_then(|v| v.as_str().map(|s| s.to_string()))
             .unwrap_or_default()
     };
@@ -601,7 +662,10 @@ async fn handle_tab_new(cmd: &Value, state: &mut BrowserState) -> Result<Value, 
 
 async fn handle_tab_switch(cmd: &Value, state: &mut BrowserState) -> Result<Value, String> {
     let mgr = state.browser.as_mut().ok_or("浏览器未启动")?;
-    let index = cmd.get("index").and_then(|v| v.as_u64()).ok_or("缺少 index 参数")? as usize;
+    let index = cmd
+        .get("index")
+        .and_then(|v| v.as_u64())
+        .ok_or("缺少 index 参数")? as usize;
     mgr.tab_switch(index).await?;
     state.session_id = mgr.active_session_id()?.to_string();
     Ok(json!({"switched_to": index}))
@@ -609,9 +673,13 @@ async fn handle_tab_switch(cmd: &Value, state: &mut BrowserState) -> Result<Valu
 
 async fn handle_tab_close(cmd: &Value, state: &mut BrowserState) -> Result<Value, String> {
     let mgr = state.browser.as_mut().ok_or("浏览器未启动")?;
-    let index = cmd.get("index").and_then(|v| v.as_u64()).map(|i| i as usize);
+    let index = cmd
+        .get("index")
+        .and_then(|v| v.as_u64())
+        .map(|i| i as usize);
     mgr.tab_close(index).await?;
-    state.session_id = mgr.active_session_id()
+    state.session_id = mgr
+        .active_session_id()
         .map(|s| s.to_string())
         .unwrap_or_default();
     Ok(json!({"tab_closed": true}))
@@ -623,15 +691,18 @@ async fn handle_evaluate(cmd: &Value, state: &mut BrowserState) -> Result<Value,
         .or_else(|| get_str(cmd, "script"))
         .ok_or("缺少 expression 参数")?;
 
-    let result: cdp::types::EvaluateResult = mgr.client.send_command_typed(
-        "Runtime.evaluate",
-        &cdp::types::EvaluateParams {
-            expression: expression.to_string(),
-            return_by_value: Some(true),
-            await_promise: Some(true),
-        },
-        Some(&sid),
-    ).await?;
+    let result: cdp::types::EvaluateResult = mgr
+        .client
+        .send_command_typed(
+            "Runtime.evaluate",
+            &cdp::types::EvaluateParams {
+                expression: expression.to_string(),
+                return_by_value: Some(true),
+                await_promise: Some(true),
+            },
+            Some(&sid),
+        )
+        .await?;
 
     Ok(json!({"value": result.result.value}))
 }

@@ -3,10 +3,10 @@
 // 移植自: aily_pdf/cmd_form.py (336行)
 // 依赖: lopdf
 
-use std::path::Path;
-use serde_json::{json, Value};
-use lopdf::Object;
 use crate::toolkit::client::TabClientError;
+use lopdf::Object;
+use serde_json::{json, Value};
+use std::path::Path;
 
 /// 读取 PDF 表单字段
 pub fn read_form(path: &Path) -> Result<Value, TabClientError> {
@@ -74,7 +74,8 @@ pub fn fill_form(
     let mut doc = lopdf::Document::load(input_path)
         .map_err(|e| TabClientError::Other(format!("无法打开 PDF: {e}")))?;
 
-    let entries = values.as_object()
+    let entries = values
+        .as_object()
         .ok_or_else(|| TabClientError::InvalidParam("values must be object".into()))?;
 
     // 找到所有表单字段的 object id
@@ -114,10 +115,7 @@ pub fn fill_form(
                 if let Ok(dict) = obj.as_dict_mut() {
                     dict.set(
                         b"V",
-                        Object::String(
-                            val_str.into_bytes(),
-                            lopdf::StringFormat::Literal,
-                        ),
+                        Object::String(val_str.into_bytes(), lopdf::StringFormat::Literal),
                     );
                     filled += 1;
                 }

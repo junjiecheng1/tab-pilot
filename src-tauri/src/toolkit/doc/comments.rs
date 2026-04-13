@@ -2,8 +2,8 @@
 //
 // 移植自: aily_doc/commands/comments.py (251行)
 
-use serde_json::{json, Value};
 use crate::toolkit::client::{self, Result, TabClient};
+use serde_json::{json, Value};
 
 /// 获取文档评论（含递归用户名解析）
 pub async fn get_comments(
@@ -28,7 +28,11 @@ pub async fn get_comments(
                 }
             }
             // 子评论
-            if let Some(replies) = item.get("reply_list").and_then(|v| v.get("replies")).and_then(|v| v.as_array()) {
+            if let Some(replies) = item
+                .get("reply_list")
+                .and_then(|v| v.get("replies"))
+                .and_then(|v| v.as_array())
+            {
                 for reply in replies {
                     if let Some(uid) = reply.get("user_id").and_then(|v| v.as_str()) {
                         if !user_ids.contains(&uid.to_string()) {
@@ -66,12 +70,20 @@ pub async fn get_comments(
 }
 
 fn inject_user_name(item: &mut Value, user_names: &std::collections::HashMap<String, String>) {
-    if let Some(uid) = item.get("user_id").and_then(|v| v.as_str()).map(|s| s.to_string()) {
+    if let Some(uid) = item
+        .get("user_id")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+    {
         if let Some(name) = user_names.get(&uid) {
             item["user_name"] = json!(name);
         }
     }
-    if let Some(replies) = item.get_mut("reply_list").and_then(|v| v.get_mut("replies")).and_then(|v| v.as_array_mut()) {
+    if let Some(replies) = item
+        .get_mut("reply_list")
+        .and_then(|v| v.get_mut("replies"))
+        .and_then(|v| v.as_array_mut())
+    {
         for reply in replies {
             inject_user_name(reply, user_names);
         }

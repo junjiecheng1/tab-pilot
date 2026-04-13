@@ -100,11 +100,7 @@ impl OutputCollector {
     /// 启动 PTY 读取线程
     ///
     /// 返回一个 handle, reader 结束时线程自动退出
-    pub fn spawn_reader(
-        &self,
-        reader: Box<dyn Read + Send>,
-        session_id: String,
-    ) {
+    pub fn spawn_reader(&self, reader: Box<dyn Read + Send>, session_id: String) {
         let collector = OutputCollector {
             buffer: Arc::clone(&self.buffer),
             tail: Arc::clone(&self.tail),
@@ -116,11 +112,7 @@ impl OutputCollector {
 }
 
 /// PTY 读取循环 (同步线程)
-fn read_loop(
-    mut reader: Box<dyn Read + Send>,
-    collector: OutputCollector,
-    session_id: String,
-) {
+fn read_loop(mut reader: Box<dyn Read + Send>, collector: OutputCollector, session_id: String) {
     let mut buf = [0u8; 4096];
     loop {
         match reader.read(&mut buf) {

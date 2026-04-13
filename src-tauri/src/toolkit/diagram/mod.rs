@@ -5,8 +5,8 @@
 
 pub mod dispatch;
 
-use serde_json::{json, Value};
 use crate::toolkit::client::TabClientError;
+use serde_json::{json, Value};
 
 /// 图类型
 #[derive(Debug, Clone, Copy)]
@@ -58,9 +58,19 @@ pub fn create_diagram(
 }
 
 fn generate_flowchart(_title: &str, data: &Value) -> Result<String, TabClientError> {
-    let nodes = data.get("nodes").and_then(|v| v.as_array()).ok_or_else(|| TabClientError::InvalidParam("需要 nodes".into()))?;
-    let edges = data.get("edges").and_then(|v| v.as_array()).unwrap_or(&Vec::new()).clone();
-    let direction = data.get("direction").and_then(|v| v.as_str()).unwrap_or("TD");
+    let nodes = data
+        .get("nodes")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| TabClientError::InvalidParam("需要 nodes".into()))?;
+    let edges = data
+        .get("edges")
+        .and_then(|v| v.as_array())
+        .unwrap_or(&Vec::new())
+        .clone();
+    let direction = data
+        .get("direction")
+        .and_then(|v| v.as_str())
+        .unwrap_or("TD");
 
     let mut lines = vec![format!("flowchart {direction}")];
     for node in nodes {
@@ -81,7 +91,10 @@ fn generate_flowchart(_title: &str, data: &Value) -> Result<String, TabClientErr
 }
 
 fn generate_sequence(_title: &str, data: &Value) -> Result<String, TabClientError> {
-    let steps = data.get("steps").and_then(|v| v.as_array()).ok_or_else(|| TabClientError::InvalidParam("需要 steps".into()))?;
+    let steps = data
+        .get("steps")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| TabClientError::InvalidParam("需要 steps".into()))?;
     let mut lines = vec!["sequenceDiagram".to_string()];
     for step in steps {
         let from = step.get("from").and_then(|v| v.as_str()).unwrap_or("A");
@@ -93,7 +106,10 @@ fn generate_sequence(_title: &str, data: &Value) -> Result<String, TabClientErro
 }
 
 fn generate_class(_title: &str, data: &Value) -> Result<String, TabClientError> {
-    let classes = data.get("classes").and_then(|v| v.as_array()).ok_or_else(|| TabClientError::InvalidParam("需要 classes".into()))?;
+    let classes = data
+        .get("classes")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| TabClientError::InvalidParam("需要 classes".into()))?;
     let mut lines = vec!["classDiagram".to_string()];
     for cls in classes {
         let name = cls.get("name").and_then(|v| v.as_str()).unwrap_or("Class");
@@ -109,8 +125,15 @@ fn generate_class(_title: &str, data: &Value) -> Result<String, TabClientError> 
 }
 
 fn generate_er(_title: &str, data: &Value) -> Result<String, TabClientError> {
-    let entities = data.get("entities").and_then(|v| v.as_array()).ok_or_else(|| TabClientError::InvalidParam("需要 entities".into()))?;
-    let relations = data.get("relations").and_then(|v| v.as_array()).unwrap_or(&Vec::new()).clone();
+    let entities = data
+        .get("entities")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| TabClientError::InvalidParam("需要 entities".into()))?;
+    let relations = data
+        .get("relations")
+        .and_then(|v| v.as_array())
+        .unwrap_or(&Vec::new())
+        .clone();
     let mut lines = vec!["erDiagram".to_string()];
     for rel in &relations {
         let from = rel.get("from").and_then(|v| v.as_str()).unwrap_or("");
@@ -123,7 +146,10 @@ fn generate_er(_title: &str, data: &Value) -> Result<String, TabClientError> {
 }
 
 fn generate_gantt(title: &str, data: &Value) -> Result<String, TabClientError> {
-    let tasks = data.get("tasks").and_then(|v| v.as_array()).ok_or_else(|| TabClientError::InvalidParam("需要 tasks".into()))?;
+    let tasks = data
+        .get("tasks")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| TabClientError::InvalidParam("需要 tasks".into()))?;
     let mut lines = vec![
         "gantt".to_string(),
         format!("    title {title}"),
@@ -131,8 +157,14 @@ fn generate_gantt(title: &str, data: &Value) -> Result<String, TabClientError> {
     ];
     for task in tasks {
         let name = task.get("name").and_then(|v| v.as_str()).unwrap_or("Task");
-        let start = task.get("start").and_then(|v| v.as_str()).unwrap_or("2024-01-01");
-        let duration = task.get("duration").and_then(|v| v.as_str()).unwrap_or("7d");
+        let start = task
+            .get("start")
+            .and_then(|v| v.as_str())
+            .unwrap_or("2024-01-01");
+        let duration = task
+            .get("duration")
+            .and_then(|v| v.as_str())
+            .unwrap_or("7d");
         lines.push(format!("    {name} : {start}, {duration}"));
     }
     Ok(lines.join("\n"))
@@ -152,7 +184,10 @@ fn generate_mindmap(title: &str, data: &Value) -> Result<String, TabClientError>
 }
 
 fn generate_state(_title: &str, data: &Value) -> Result<String, TabClientError> {
-    let transitions = data.get("transitions").and_then(|v| v.as_array()).ok_or_else(|| TabClientError::InvalidParam("需要 transitions".into()))?;
+    let transitions = data
+        .get("transitions")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| TabClientError::InvalidParam("需要 transitions".into()))?;
     let mut lines = vec!["stateDiagram-v2".to_string()];
     for t in transitions {
         let from = t.get("from").and_then(|v| v.as_str()).unwrap_or("[*]");

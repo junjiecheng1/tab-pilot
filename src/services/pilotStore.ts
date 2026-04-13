@@ -36,6 +36,7 @@ export const usePilotStore = defineStore('pilot', () => {
   const userDisplay = computed(() => status.value?.user_display ?? '');
   const userId = computed(() => status.value?.user_id ?? '');
   const toolsReady = computed(() => status.value?.tools_ready ?? false);
+  const toolNames = computed(() => status.value?.tool_names ?? []);
 
   // ── 方法 ──
 
@@ -129,7 +130,7 @@ export const usePilotStore = defineStore('pilot', () => {
     guardMode, guardModeText, guardModeInfo,
     workspace, serverUrl, version,
     browserEnabled, auditEnabled,
-    userDisplay, userId, toolsReady,
+    userDisplay, userId, toolsReady, toolNames,
     // 方法
     fetchStatus, refresh, fetchLogs, reset, setSetting,
     startAutoRefresh, stopAutoRefresh,

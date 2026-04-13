@@ -3,9 +3,9 @@
 // Agent: bash("tab-pdf extract document.pdf")
 //        bash("tab-pdf extract https://example.com/file.pdf")
 
-use serde_json::{json, Value};
 use crate::core::error::{ServiceError, ServiceResult};
 use crate::toolkit::download::resolve_input;
+use serde_json::{json, Value};
 
 /// 分发 tab-pdf 子命令 (async: extract 支持 URL 下载)
 pub async fn dispatch(args: &[String]) -> ServiceResult {
@@ -36,25 +36,17 @@ pub async fn dispatch(args: &[String]) -> ServiceResult {
             local.cleanup();
             wrap(result)
         }
-        "pages" => {
-            Err(ServiceError::bad_request("tab-pdf pages: 参数解析待实现"))
-        }
-        "convert" => {
-            Err(ServiceError::bad_request("tab-pdf convert: 参数解析待实现"))
-        }
-        "latex" => {
-            Err(ServiceError::bad_request("tab-pdf latex: 参数解析待实现"))
-        }
-        "html" => {
-            Err(ServiceError::bad_request("tab-pdf html: 参数解析待实现"))
-        }
+        "pages" => Err(ServiceError::bad_request("tab-pdf pages: 参数解析待实现")),
+        "convert" => Err(ServiceError::bad_request("tab-pdf convert: 参数解析待实现")),
+        "latex" => Err(ServiceError::bad_request("tab-pdf latex: 参数解析待实现")),
+        "html" => Err(ServiceError::bad_request("tab-pdf html: 参数解析待实现")),
         "help" | "--help" | "-h" => Ok(json!({
             "output": HELP,
             "exit_code": 0,
         })),
-        _ => Err(ServiceError::bad_request(
-            format!("tab-pdf: 未知命令 '{subcmd}'")
-        )),
+        _ => Err(ServiceError::bad_request(format!(
+            "tab-pdf: 未知命令 '{subcmd}'"
+        ))),
     }
 }
 

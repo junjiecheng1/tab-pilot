@@ -3,9 +3,9 @@
 // 移植自: aily_drive/commands/upload.py + download.py
 // 独立实现，不复用 base::file_ops
 
-use std::path::Path;
-use serde_json::{json, Value};
 use crate::toolkit::client::{self, Result, TabClient, TabClientError};
+use serde_json::{json, Value};
+use std::path::Path;
 
 /// 格式化文件大小
 fn format_size(bytes: u64) -> String {
@@ -36,17 +36,21 @@ pub async fn upload_file(
     parent_node: &str,
 ) -> Result<Value> {
     let path = Path::new(file_path);
-    let file_name = path.file_name()
+    let file_name = path
+        .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "unnamed".to_string());
 
-    let file_content = tokio::fs::read(path).await
+    let file_content = tokio::fs::read(path)
+        .await
         .map_err(|e| TabClientError::Other(format!("读取文件失败: {e}")))?;
 
     let file_size = file_content.len() as u64;
 
     // 调用 client API 上传
-    let raw = client::drive::upload_file(client, &file_name, file_content, parent_type, parent_node).await?;
+    let raw =
+        client::drive::upload_file(client, &file_name, file_content, parent_type, parent_node)
+            .await?;
 
     // 规范化结果
     let mut result = json!({
@@ -111,7 +115,8 @@ pub async fn download_files(
     file_tokens: &[String],
     output_dir: &str,
 ) -> Result<Value> {
-    tokio::fs::create_dir_all(output_dir).await
+    tokio::fs::create_dir_all(output_dir)
+        .await
         .map_err(|e| TabClientError::Other(format!("创建目录失败: {e}")))?;
 
     let mut results = Vec::new();

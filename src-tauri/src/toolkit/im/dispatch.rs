@@ -1,8 +1,8 @@
 // toolkit/im/dispatch — 消息操作 CLI 命令分发
 
-use serde_json::{json, Value};
 use crate::core::error::{ServiceError, ServiceResult};
 use crate::toolkit::client::TabClient;
+use serde_json::{json, Value};
 
 pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
     let subcmd = args.first().map(|s| s.as_str()).unwrap_or("help");
@@ -17,9 +17,16 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             let end_time = named_arg(args, "--end").ok();
 
             let result = super::messages::list_messages(
-                client, &chat_id, &id_type, page_size, max_pages,
-                start_time.as_deref(), end_time.as_deref(),
-            ).await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                client,
+                &chat_id,
+                &id_type,
+                page_size,
+                max_pages,
+                start_time.as_deref(),
+                end_time.as_deref(),
+            )
+            .await
+            .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(json!({"messages": result, "count": result.len()}))
         }
         "search-messages" => {
@@ -32,10 +39,17 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             let end_time = named_arg(args, "--end").ok();
 
             let result = super::messages::search_messages(
-                client, &query, page_size, max_pages,
-                msg_type.as_deref(), chat_type.as_deref(),
-                start_time.as_deref(), end_time.as_deref(),
-            ).await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                client,
+                &query,
+                page_size,
+                max_pages,
+                msg_type.as_deref(),
+                chat_type.as_deref(),
+                start_time.as_deref(),
+                end_time.as_deref(),
+            )
+            .await
+            .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(json!({"messages": result, "count": result.len()}))
         }
         "list-chats" => {
@@ -43,7 +57,8 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             let max_pages: usize = parse_int(args, "--max-pages", 3) as usize;
 
             let result = super::chats::list_chats(client, page_size, max_pages)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(json!({"chats": result, "count": result.len()}))
         }
         "search-chats" => {
@@ -51,13 +66,15 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             let page_size: i32 = parse_int(args, "--limit", 20);
 
             let result = super::chats::search_chats(client, &query, page_size)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(json!({"chats": result, "count": result.len()}))
         }
         "chat-info" => {
             let chat_id = named_arg(args, "--chat")?;
             let result = super::chats::get_chat_info(client, &chat_id)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "chat-members" => {
@@ -65,7 +82,8 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             let page_size: i32 = parse_int(args, "--limit", 100);
 
             let result = super::chats::list_chat_members(client, &chat_id, page_size)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(json!({"members": result, "count": result.len()}))
         }
         "send-message" => {
@@ -74,9 +92,10 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             let msg_type = named_arg(args, "--type").unwrap_or_else(|_| "text".to_string());
             let content = named_arg(args, "--content")?;
 
-            let result = super::messages::send_message(
-                client, &receive_id, &id_type, &msg_type, &content,
-            ).await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+            let result =
+                super::messages::send_message(client, &receive_id, &id_type, &msg_type, &content)
+                    .await
+                    .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "reply-message" => {
@@ -84,9 +103,9 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             let msg_type = named_arg(args, "--type").unwrap_or_else(|_| "text".to_string());
             let content = named_arg(args, "--content")?;
 
-            let result = super::messages::reply_message(
-                client, &message_id, &msg_type, &content,
-            ).await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+            let result = super::messages::reply_message(client, &message_id, &msg_type, &content)
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "p2p-chatid" => {
@@ -94,14 +113,17 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             let id_type = named_arg(args, "--id-type").unwrap_or_else(|_| "open_id".to_string());
 
             let result = super::chats::p2p_chat_id(client, &user_id, &id_type)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "help" | "--help" | "-h" => Ok(json!({
             "output": HELP,
             "exit_code": 0,
         })),
-        _ => Err(ServiceError::bad_request(format!("tab-im: 未知命令 '{subcmd}'"))),
+        _ => Err(ServiceError::bad_request(format!(
+            "tab-im: 未知命令 '{subcmd}'"
+        ))),
     }
 }
 
@@ -135,7 +157,10 @@ fn named_arg(args: &[String], flag: &str) -> Result<String, ServiceError> {
 }
 
 fn parse_int(args: &[String], flag: &str, default: i32) -> i32 {
-    named_arg(args, flag).ok().and_then(|s| s.parse().ok()).unwrap_or(default)
+    named_arg(args, flag)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(default)
 }
 
 fn wrap(data: Value) -> ServiceResult {

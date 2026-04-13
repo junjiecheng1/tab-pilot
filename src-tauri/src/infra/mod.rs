@@ -5,8 +5,8 @@
 
 pub mod audit;
 pub mod guard;
-pub mod store;
-pub mod runtime;
-pub mod tools;
 pub mod mcp;
 pub mod pty_clean;
+pub mod runtime;
+pub mod store;
+pub mod tools;

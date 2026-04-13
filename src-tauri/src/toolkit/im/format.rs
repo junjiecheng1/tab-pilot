@@ -31,9 +31,8 @@ pub fn format_message(msg: &Value) -> String {
         .and_then(|v| v.as_str())
         .unwrap_or("{}");
 
-    let content_val: Value = serde_json::from_str(content_str).unwrap_or(Value::Object(
-        serde_json::Map::new(),
-    ));
+    let content_val: Value =
+        serde_json::from_str(content_str).unwrap_or(Value::Object(serde_json::Map::new()));
 
     let parsed = types::parse_content(msg_type, &content_val);
     let content_text = format_content(&parsed);
@@ -47,21 +46,22 @@ fn format_content(content: &MessageContent) -> String {
         MessageContent::Text(text) => text.clone(),
         MessageContent::RichText(val) => extract_rich_text(val),
         MessageContent::Image(img) => format!("[图片 {}]", img.image_key),
-        MessageContent::File(file) => format!("[文件 {} ({} bytes)]", file.file_name, file.file_size),
+        MessageContent::File(file) => {
+            format!("[文件 {} ({} bytes)]", file.file_name, file.file_size)
+        }
         MessageContent::Audio(audio) => format!("[语音 {}s]", audio.duration),
         MessageContent::Video(video) => format!("[视频 {}s]", video.duration),
         MessageContent::Sticker(id) => format!("[表情 {id}]"),
         MessageContent::ShareChat(id) => format!("[分享群聊 {id}]"),
         MessageContent::ShareUser(id) => format!("[分享用户 {id}]"),
         MessageContent::Post(val) => extract_post_text(val),
-        MessageContent::Interactive(val) => {
-            val.get("header")
-                .and_then(|h| h.get("title"))
-                .and_then(|t| t.get("content"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("[卡片消息]")
-                .to_string()
-        }
+        MessageContent::Interactive(val) => val
+            .get("header")
+            .and_then(|h| h.get("title"))
+            .and_then(|t| t.get("content"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("[卡片消息]")
+            .to_string(),
         MessageContent::MergeForward(msgs) => format!("[合并转发 {} 条]", msgs.len()),
         MessageContent::Location(loc) => format!("[位置 {}]", loc.name),
         MessageContent::Unknown(_) => "[未知消息]".to_string(),
@@ -94,10 +94,7 @@ fn extract_rich_text(val: &Value) -> String {
 
 /// 从帖子中提取文本
 fn extract_post_text(val: &Value) -> String {
-    let title = val
-        .get("title")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let title = val.get("title").and_then(|v| v.as_str()).unwrap_or("");
 
     let mut body_parts = Vec::new();
     if let Some(content) = val.get("content").and_then(|v| v.as_array()) {
@@ -137,12 +134,23 @@ fn format_attachment(att: &Value) -> String {
         .or_else(|| att.get("file_name"))
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    
+
     match att_type {
-        "image" => format!("  📷 [图片]{}", if name.is_empty() { String::new() } else { format!(" {name}") }),
+        "image" => format!(
+            "  📷 [图片]{}",
+            if name.is_empty() {
+                String::new()
+            } else {
+                format!(" {name}")
+            }
+        ),
         "file" => {
             let size = att.get("size").and_then(|v| v.as_u64()).unwrap_or(0);
-            let size_str = if size > 0 { format!(" ({}KB)", size / 1024) } else { String::new() };
+            let size_str = if size > 0 {
+                format!(" ({}KB)", size / 1024)
+            } else {
+                String::new()
+            };
             format!("  📎 [文件] {name}{size_str}")
         }
         "audio" => "  🎵 [语音]".to_string(),
@@ -163,7 +171,11 @@ fn short_time(val: &Value) -> String {
     if ts == 0.0 {
         return String::new();
     }
-    let secs = if ts > 1e12 { (ts / 1000.0) as i64 } else { ts as i64 };
+    let secs = if ts > 1e12 {
+        (ts / 1000.0) as i64
+    } else {
+        ts as i64
+    };
     // 简化格式 — 使用 chrono 如果可用，否则用原始时间戳
     format!("{secs}")
 }
@@ -172,17 +184,17 @@ fn short_time(val: &Value) -> String {
 /// 移植自: aily_im/commands/_format.py format_all + _format_thread
 pub fn format_threaded(messages: &[Value]) -> String {
     use std::collections::{HashMap, HashSet};
-    
+
     let mut id_to_msg: HashMap<String, &Value> = HashMap::new();
     let mut threads: HashMap<String, Vec<&Value>> = HashMap::new();
-    
+
     // 建索引
     for msg in messages {
         let msg_id = msg.get("message_id").and_then(|v| v.as_str()).unwrap_or("");
         if !msg_id.is_empty() {
             id_to_msg.insert(msg_id.to_string(), msg);
         }
-        
+
         let parent = msg
             .get("parent_id")
             .or_else(|| msg.get("root_id"))
@@ -192,10 +204,10 @@ pub fn format_threaded(messages: &[Value]) -> String {
             threads.entry(parent.to_string()).or_default().push(msg);
         }
     }
-    
+
     let mut seen: HashSet<String> = HashSet::new();
     let mut lines: Vec<String> = Vec::new();
-    
+
     // 先输出话题
     for (parent_id, replies) in &threads {
         if let Some(root) = id_to_msg.get(parent_id) {
@@ -205,7 +217,7 @@ pub fn format_threaded(messages: &[Value]) -> String {
                     seen.insert(rid.to_string());
                 }
             }
-            
+
             lines.push(format!("💬 {}", format_message(root)));
             for r in replies {
                 lines.push(format!("  ↳ {}", format_message(r)));
@@ -213,7 +225,7 @@ pub fn format_threaded(messages: &[Value]) -> String {
             lines.push(String::new());
         }
     }
-    
+
     // 独立消息
     for msg in messages {
         let msg_id = msg.get("message_id").and_then(|v| v.as_str()).unwrap_or("");
@@ -221,7 +233,7 @@ pub fn format_threaded(messages: &[Value]) -> String {
             lines.push(format_message(msg));
         }
     }
-    
+
     lines.join("\n")
 }
 
@@ -229,18 +241,21 @@ pub fn format_threaded(messages: &[Value]) -> String {
 /// 移植自: aily_im/commands/_format.py format_listed_messages
 pub fn format_listed_chats(chats: &[Value]) -> String {
     let mut parts: Vec<String> = Vec::new();
-    
+
     for chat in chats {
-        let name = chat.get("name").and_then(|v| v.as_str()).unwrap_or("未命名群聊");
+        let name = chat
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("未命名群聊");
         let messages = chat.get("messages").and_then(|v| v.as_array());
-        
+
         let body = match messages {
             Some(msgs) if !msgs.is_empty() => format_threaded(msgs),
             _ => "（无消息）".to_string(),
         };
-        
+
         parts.push(format!("## {name}\n{body}"));
     }
-    
+
     parts.join("\n\n---\n\n")
 }

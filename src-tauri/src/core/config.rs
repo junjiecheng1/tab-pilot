@@ -49,8 +49,7 @@ impl AppConfig {
             .ok()
             .and_then(|v| v.parse().ok());
 
-        let log_level =
-            std::env::var("LOG_LEVEL").unwrap_or_else(|_| "INFO".to_string());
+        let log_level = std::env::var("LOG_LEVEL").unwrap_or_else(|_| "INFO".to_string());
 
         Self {
             origins,

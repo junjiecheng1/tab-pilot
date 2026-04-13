@@ -2,9 +2,9 @@
 //
 // 按命名空间隔离, 每个模块一个 JSON 文件
 
+use log;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use log;
 
 /// JSON 文件 KV 存储
 pub struct LocalStore {
@@ -50,9 +50,7 @@ impl LocalStore {
             return HashMap::new();
         }
         match std::fs::read_to_string(&path) {
-            Ok(content) => {
-                serde_json::from_str(&content).unwrap_or_default()
-            }
+            Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
             Err(_) => HashMap::new(),
         }
     }

@@ -77,11 +77,7 @@ impl<T: Send + 'static> SessionPool<T> {
         if !pool.is_empty() {
             self.available.notify_waiters();
         }
-        log::info!(
-            "[{}] 会话池就绪, {} 个会话",
-            self.name,
-            pool.len()
-        );
+        log::info!("[{}] 会话池就绪, {} 个会话", self.name, pool.len());
     }
 
     /// 从池中获取一个会话, 可选等待超时
@@ -119,11 +115,7 @@ impl<T: Send + 'static> SessionPool<T> {
             return None;
         }
         let session = pool.remove(0);
-        log::debug!(
-            "[{}] 获取会话, 剩余 {}",
-            self.name,
-            pool.len()
-        );
+        log::debug!("[{}] 获取会话, 剩余 {}", self.name, pool.len());
         Some(session)
     }
 

@@ -2,9 +2,9 @@
 //
 // Agent: bash("tab-image watermark --input photo.jpg --output out.jpg --text '版权' --opacity 0.3")
 
-use std::path::Path;
-use serde_json::json;
 use crate::core::error::{ServiceError, ServiceResult};
+use serde_json::json;
+use std::path::Path;
 
 pub fn dispatch(args: &[String]) -> ServiceResult {
     let subcmd = args.first().map(|s| s.as_str()).unwrap_or("help");
@@ -34,7 +34,8 @@ pub fn dispatch(args: &[String]) -> ServiceResult {
                 opacity,
                 font_size,
                 angle,
-            ).map_err(|e| ServiceError::internal(format!("{e}")))?;
+            )
+            .map_err(|e| ServiceError::internal(format!("{e}")))?;
 
             let out = serde_json::to_string(&result).unwrap_or_default();
             Ok(json!({"output": out, "exit_code": 0}))
@@ -43,9 +44,9 @@ pub fn dispatch(args: &[String]) -> ServiceResult {
             "output": HELP,
             "exit_code": 0,
         })),
-        _ => Err(ServiceError::bad_request(
-            format!("tab-image: 未知命令 '{subcmd}'")
-        )),
+        _ => Err(ServiceError::bad_request(format!(
+            "tab-image: 未知命令 '{subcmd}'"
+        ))),
     }
 }
 

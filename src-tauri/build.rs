@@ -4,10 +4,10 @@
 //   build_scripts/env.rs  — 编译时嵌入 env 变量
 //   build_scripts/cdp.rs  — CDP protocol codegen
 
-#[path = "build_scripts/env.rs"]
-mod env;
 #[path = "build_scripts/cdp.rs"]
 mod cdp;
+#[path = "build_scripts/env.rs"]
+mod env;
 
 fn main() {
     tauri_build::build();

@@ -3,9 +3,9 @@
 // 移植自: aily_mcp/commands/mcp.py
 // 复用 infra::mcp::bridge 模块
 
-use serde_json::{json, Value};
-use crate::toolkit::client::TabClientError;
 use crate::infra::mcp::McpBridge;
+use crate::toolkit::client::TabClientError;
+use serde_json::{json, Value};
 
 /// 列出所有 MCP 服务器
 pub fn list_servers(bridge: &McpBridge) -> Result<Value, TabClientError> {
@@ -24,7 +24,9 @@ pub async fn list_tools(
     bridge: &mut McpBridge,
     server_name: &str,
 ) -> Result<Value, TabClientError> {
-    let tools = bridge.list_tools_for(server_name).await
+    let tools = bridge
+        .list_tools_for(server_name)
+        .await
         .map_err(|e: String| TabClientError::Other(format!("列出工具失败: {e}")))?;
 
     let count = tools.len();
@@ -36,16 +38,19 @@ pub async fn list_tools(
 }
 
 /// 列出所有服务器的全部工具
-pub async fn discover_all_tools(
-    bridge: &mut McpBridge,
-) -> Result<Value, TabClientError> {
+pub async fn discover_all_tools(bridge: &mut McpBridge) -> Result<Value, TabClientError> {
     let discovered = bridge.discover_tools().await;
 
-    let tool_list: Vec<Value> = discovered.iter().map(|t| json!({
-        "server": &t.server,
-        "name": &t.name,
-        "description": &t.description,
-    })).collect();
+    let tool_list: Vec<Value> = discovered
+        .iter()
+        .map(|t| {
+            json!({
+                "server": &t.server,
+                "name": &t.name,
+                "description": &t.description,
+            })
+        })
+        .collect();
 
     let count = tool_list.len();
     Ok(json!({
@@ -61,7 +66,9 @@ pub async fn call_tool(
     tool_name: &str,
     arguments: Value,
 ) -> Result<Value, TabClientError> {
-    let result = bridge.call(server_name, tool_name, arguments).await
+    let result = bridge
+        .call(server_name, tool_name, arguments)
+        .await
         .map_err(|e: String| TabClientError::Other(format!("MCP 调用失败: {e}")))?;
 
     Ok(json!({

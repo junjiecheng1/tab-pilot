@@ -3,8 +3,8 @@
 // tabpilot://auth?token=xxx&challenge=yyy
 // 收到后: 验证 challenge → 保存 token → 唤醒连接 → 通知后端
 
-use tauri::{AppHandle, Emitter, Manager};
 use crate::router::AppState;
+use tauri::{AppHandle, Emitter, Manager};
 
 /// 从 deep link URL 提取 token 和 challenge
 fn extract_auth_from_url(payload: &str) -> Option<(String, String)> {
@@ -16,8 +16,12 @@ fn extract_auth_from_url(payload: &str) -> Option<(String, String)> {
         let mut token = String::new();
         let mut challenge = String::new();
         for (key, value) in url.query_pairs() {
-            if key == "token" { token = value.to_string(); }
-            if key == "challenge" { challenge = value.to_string(); }
+            if key == "token" {
+                token = value.to_string();
+            }
+            if key == "challenge" {
+                challenge = value.to_string();
+            }
         }
         if !token.is_empty() {
             return Some((token, challenge));

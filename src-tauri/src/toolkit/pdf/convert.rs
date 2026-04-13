@@ -7,9 +7,9 @@
 // Rust 端暂无等价的纯 crate 方案 (docx2pdf 不成熟)
 // 后续可通过 CDP (headless Chrome) 打印来实现
 
-use std::path::Path;
-use serde_json::{json, Value};
 use crate::toolkit::client::TabClientError;
+use serde_json::{json, Value};
+use std::path::Path;
 
 /// 将文件转换为 PDF
 ///
@@ -17,11 +17,9 @@ use crate::toolkit::client::TabClientError;
 /// - .pdf → 直接拷贝
 /// - .html → 通过 CDP 打印 (需要 browser agent)
 /// - 其他格式 → 提示不支持 (后续集成)
-pub fn convert_to_pdf(
-    input: &Path,
-    output: Option<&Path>,
-) -> Result<Value, TabClientError> {
-    let ext = input.extension()
+pub fn convert_to_pdf(input: &Path, output: Option<&Path>) -> Result<Value, TabClientError> {
+    let ext = input
+        .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("")
         .to_lowercase();
@@ -45,13 +43,11 @@ pub fn convert_to_pdf(
         "html" | "htm" => {
             // HTML → PDF 应通过 CDP, 参见 pdf/html.rs
             Err(TabClientError::InvalidParam(
-                "HTML → PDF 请使用 tab-pdf html 命令 (通过 CDP 渲染)".into()
+                "HTML → PDF 请使用 tab-pdf html 命令 (通过 CDP 渲染)".into(),
             ))
         }
-        _ => {
-            Err(TabClientError::InvalidParam(format!(
-                "格式 .{ext} 暂不支持直接转换 PDF. 支持格式: pdf, html"
-            )))
-        }
+        _ => Err(TabClientError::InvalidParam(format!(
+            "格式 .{ext} 暂不支持直接转换 PDF. 支持格式: pdf, html"
+        ))),
     }
 }

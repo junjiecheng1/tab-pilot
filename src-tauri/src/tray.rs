@@ -12,8 +12,8 @@
 //   · 退出
 
 use tauri::{
-    menu::{Menu, MenuItem, PredefinedMenuItem, Submenu, CheckMenuItem},
-    tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState},
+    menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     App, Emitter, Manager,
 };
 
@@ -23,9 +23,8 @@ use crate::router::AppState;
 pub fn setup_tray(app: &App) -> Result<(), Box<dyn std::error::Error>> {
     // 读取当前状态
     let state = app.state::<AppState>();
-    let current_mode = tauri::async_runtime::block_on(async {
-        state.guard.read().await.mode().to_string()
-    });
+    let current_mode =
+        tauri::async_runtime::block_on(async { state.guard.read().await.mode().to_string() });
     let autostart_enabled = {
         // 尝试读 autostart 插件状态
         use tauri_plugin_autostart::ManagerExt;
@@ -40,25 +39,44 @@ pub fn setup_tray(app: &App) -> Result<(), Box<dyn std::error::Error>> {
 
     // 安全模式 — 根据当前状态设置 checked
     let mode_conservative = CheckMenuItem::with_id(
-        app, "mode_conservative", "保守模式", true,
-        current_mode == "conservative", None::<&str>,
+        app,
+        "mode_conservative",
+        "保守模式",
+        true,
+        current_mode == "conservative",
+        None::<&str>,
     )?;
     let mode_standard = CheckMenuItem::with_id(
-        app, "mode_standard", "标准模式", true,
-        current_mode == "standard", None::<&str>,
+        app,
+        "mode_standard",
+        "标准模式",
+        true,
+        current_mode == "standard",
+        None::<&str>,
     )?;
     let mode_trust = CheckMenuItem::with_id(
-        app, "mode_trust", "信任模式", true,
-        current_mode == "trust", None::<&str>,
+        app,
+        "mode_trust",
+        "信任模式",
+        true,
+        current_mode == "trust",
+        None::<&str>,
     )?;
     let mode_submenu = Submenu::with_items(
-        app, "安全模式", true,
+        app,
+        "安全模式",
+        true,
         &[&mode_conservative, &mode_standard, &mode_trust],
     )?;
 
     // 开机启动 — 同步当前状态
     let autostart_item = CheckMenuItem::with_id(
-        app, "autostart", "开机启动", true, autostart_enabled, None::<&str>,
+        app,
+        "autostart",
+        "开机启动",
+        true,
+        autostart_enabled,
+        None::<&str>,
     )?;
 
     // 退出
@@ -66,7 +84,14 @@ pub fn setup_tray(app: &App) -> Result<(), Box<dyn std::error::Error>> {
 
     let menu = Menu::with_items(
         app,
-        &[&status_item, &sep1, &mode_submenu, &autostart_item, &sep2, &quit_item],
+        &[
+            &status_item,
+            &sep1,
+            &mode_submenu,
+            &autostart_item,
+            &sep2,
+            &quit_item,
+        ],
     )?;
 
     // 图标 (编译时嵌入 32x32 PNG)
@@ -135,7 +160,8 @@ pub fn setup_tray(app: &App) -> Result<(), Box<dyn std::error::Error>> {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
                 ..
-            } = event {
+            } = event
+            {
                 if let Some(window) = tray.app_handle().get_webview_window("main") {
                     let _ = window.show();
                     let _ = window.unminimize();
@@ -153,7 +179,9 @@ pub fn setup_tray(app: &App) -> Result<(), Box<dyn std::error::Error>> {
 async fn set_guard_mode(handle: &tauri::AppHandle, mode: &str) {
     let state = handle.state::<AppState>();
     state.guard.write().await.set_mode(mode);
-    state.store.set("settings", "guard_mode", serde_json::json!(mode));
+    state
+        .store
+        .set("settings", "guard_mode", serde_json::json!(mode));
 
     let mode_label = match mode {
         "conservative" => "保守模式",

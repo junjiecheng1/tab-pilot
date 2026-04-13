@@ -103,7 +103,8 @@ impl BrowserSdkService {
             }
             "select_option" => {
                 let selector = req_str(params, "selector")?;
-                let value = params["value"].as_str()
+                let value = params["value"]
+                    .as_str()
                     .or(params["label"].as_str())
                     .unwrap_or_default();
                 json!({"action": "select", "selector": selector, "value": value})
@@ -147,7 +148,11 @@ impl BrowserSdkService {
             "screenshot" => json!({"action": "screenshot"}),
             "get_html" => {
                 let outer = params["outer"].as_bool().unwrap_or(false);
-                let expr = if outer { "document.documentElement.outerHTML" } else { "document.documentElement.innerHTML" };
+                let expr = if outer {
+                    "document.documentElement.outerHTML"
+                } else {
+                    "document.documentElement.innerHTML"
+                };
                 json!({"action": "evaluate", "expression": expr})
             }
             "get_text" => json!({"action": "gettext"}),
@@ -198,8 +203,10 @@ impl BrowserSdkService {
                         url=url.replace('\'', "\\'"))
                 })
             }
-            "wait_for_network_idle" | "wait_for_download"
-            | "wait_for_response" | "wait_for_request" => {
+            "wait_for_network_idle"
+            | "wait_for_download"
+            | "wait_for_response"
+            | "wait_for_request" => {
                 let tms = timeout_ms(params);
                 json!({"action": "wait", "ms": tms})
             }
@@ -216,16 +223,21 @@ impl BrowserSdkService {
             "list_pages" => json!({"action": "tab_list"}),
             "create_page" => {
                 let mut cmd = json!({"action": "tab_new"});
-                if let Some(u) = params["url"].as_str() { cmd["url"] = json!(u); }
+                if let Some(u) = params["url"].as_str() {
+                    cmd["url"] = json!(u);
+                }
                 cmd
             }
             "close_page" => {
                 let mut cmd = json!({"action": "tab_close"});
-                if let Some(idx) = params["index"].as_u64() { cmd["index"] = json!(idx); }
+                if let Some(idx) = params["index"].as_u64() {
+                    cmd["index"] = json!(idx);
+                }
                 cmd
             }
             "activate_tab" => {
-                let idx = params["index"].as_u64()
+                let idx = params["index"]
+                    .as_u64()
                     .ok_or_else(|| ServiceError::bad_request("缺少 index"))?;
                 json!({"action": "tab_switch", "index": idx})
             }
@@ -303,7 +315,11 @@ impl BrowserSdkService {
             "get_url" => json!({"action": "url"}),
             "get_title" => json!({"action": "title"}),
 
-            _ => return Err(ServiceError::bad_request(format!("未知 browser_sdk 操作: {action}"))),
+            _ => {
+                return Err(ServiceError::bad_request(format!(
+                    "未知 browser_sdk 操作: {action}"
+                )))
+            }
         };
         Ok(cmd)
     }
@@ -312,28 +328,53 @@ impl BrowserSdkService {
 
     pub fn normalize_url(url: &str) -> String {
         let normalized = url.trim();
-        if normalized.is_empty() { return normalized.to_string(); }
-        let non_hier = ["about:", "data:", "file:", "mailto:", "javascript:", "blob:"];
+        if normalized.is_empty() {
+            return normalized.to_string();
+        }
+        let non_hier = [
+            "about:",
+            "data:",
+            "file:",
+            "mailto:",
+            "javascript:",
+            "blob:",
+        ];
         if normalized.contains("://") || non_hier.iter().any(|s| normalized.starts_with(s)) {
             return normalized.to_string();
         }
         if normalized.starts_with("//") {
             return format!("https:{normalized}");
         }
-        let scheme = if Self::is_local(normalized) { "http://" } else { "https://" };
+        let scheme = if Self::is_local(normalized) {
+            "http://"
+        } else {
+            "https://"
+        };
         format!("{scheme}{normalized}")
     }
 
     fn is_local(host: &str) -> bool {
-        let hostname = host.split(':').next().unwrap_or(host)
-            .split('/').next().unwrap_or(host).to_lowercase();
-        if hostname == "localhost" { return true; }
-        hostname.parse::<IpAddr>().map_or(false, |ip| ip.is_loopback())
+        let hostname = host
+            .split(':')
+            .next()
+            .unwrap_or(host)
+            .split('/')
+            .next()
+            .unwrap_or(host)
+            .to_lowercase();
+        if hostname == "localhost" {
+            return true;
+        }
+        hostname
+            .parse::<IpAddr>()
+            .map_or(false, |ip| ip.is_loopback())
     }
 }
 
 fn req_str(params: &Value, key: &str) -> Result<String, ServiceError> {
-    params[key].as_str().map(String::from)
+    params[key]
+        .as_str()
+        .map(String::from)
         .ok_or_else(|| ServiceError::bad_request(format!("缺少 {key} 参数")))
 }
 

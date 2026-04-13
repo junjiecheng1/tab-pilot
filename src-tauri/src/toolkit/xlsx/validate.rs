@@ -2,10 +2,10 @@
 //
 // zip crate 检查 OpenXML 结构
 
+use crate::toolkit::client::TabClientError;
+use serde_json::{json, Value};
 use std::io::Read;
 use std::path::Path;
-use serde_json::{json, Value};
-use crate::toolkit::client::TabClientError;
 
 /// 验证 Excel 文件
 pub fn validate_file(path: &Path) -> Result<Value, TabClientError> {

@@ -87,8 +87,13 @@ impl SandboxService {
     /// 获取环境变量 (过滤敏感信息)
     pub async fn env(&self) -> ServiceResult {
         let sensitive = [
-            "SECRET", "TOKEN", "API_KEY", "PASSWORD", "PRIVATE",
-            "CREDENTIAL", "AUTH",
+            "SECRET",
+            "TOKEN",
+            "API_KEY",
+            "PASSWORD",
+            "PRIVATE",
+            "CREDENTIAL",
+            "AUTH",
         ];
 
         let filtered: Value = std::env::vars()
@@ -126,7 +131,9 @@ impl SandboxService {
             "workspace" => self.workspace().await,
             "env" => self.env().await,
             "permissions" => self.permissions().await,
-            _ => Err(ServiceError::bad_request(format!("未知 sandbox 操作: {action}"))),
+            _ => Err(ServiceError::bad_request(format!(
+                "未知 sandbox 操作: {action}"
+            ))),
         }
     }
 }

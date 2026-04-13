@@ -155,11 +155,11 @@
             </span>
           </div>
           <div class="about-row">
-            <span class="about-label">CLI 工具 (rg, fd, jq, yq)</span>
+            <span class="about-label">CLI 工具 ({{ toolsLabel }})</span>
             <span class="about-value">
               <span :class="['pulse-dot', store.toolsReady ? 'connected' : 'disconnected']"></span>
               <span class="kernel-badge">
-                {{ store.toolsReady ? '已就绪' : '未安装' }}
+                {{ store.toolsReady ? '已就绪' : '未就绪' }}
               </span>
             </span>
           </div>
@@ -308,6 +308,10 @@ const endpointHost = computed(() => {
 
 const isLoggedIn = computed(() => store.status?.running && store.isConnected);
 const userDisplay = computed(() => store.userDisplay);
+const toolsLabel = computed(() => {
+  const names = store.toolNames;
+  return names.length ? names.join(', ') : '加载中';
+});
 
 
 onMounted(async () => {

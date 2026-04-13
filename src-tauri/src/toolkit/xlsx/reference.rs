@@ -2,16 +2,16 @@
 //
 // calamine 检查公式中的引用问题
 
-use std::path::Path;
-use serde_json::{json, Value};
 use crate::toolkit::client::TabClientError;
+use serde_json::{json, Value};
+use std::path::Path;
 
 /// 检查公式引用（跨表/范围不足/模式不一致）
 pub fn check_references(path: &Path) -> Result<Value, TabClientError> {
-    use calamine::{open_workbook_auto, Reader, Data};
+    use calamine::{open_workbook_auto, Data, Reader};
 
-    let mut workbook = open_workbook_auto(path)
-        .map_err(|e| TabClientError::Other(format!("无法打开: {e}")))?;
+    let mut workbook =
+        open_workbook_auto(path).map_err(|e| TabClientError::Other(format!("无法打开: {e}")))?;
 
     let sheet_names: Vec<String> = workbook.sheet_names().to_vec();
     let mut issues: Vec<Value> = Vec::new();

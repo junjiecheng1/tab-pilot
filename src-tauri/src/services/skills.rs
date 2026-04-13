@@ -106,7 +106,10 @@ impl SkillService {
     }
 
     /// 注册目录下的所有技能
-    pub fn register_directory(&mut self, path: &str) -> Result<SkillRegistrationResult, SkillError> {
+    pub fn register_directory(
+        &mut self,
+        path: &str,
+    ) -> Result<SkillRegistrationResult, SkillError> {
         let root = Self::validate_path(path)?;
         let skill_files = Self::discover_skill_files(&root);
         if skill_files.is_empty() {
@@ -203,16 +206,18 @@ impl SkillService {
                     .as_str()
                     .ok_or_else(|| SkillError::BadRequest("缺少 oss_url".into()))?;
                 let dest_dir = params["dest_dir"].as_str().map(|s| s.to_string());
-                    
-                self.sync_remote(skill_id, version, oss_url, dest_dir).await?;
+
+                self.sync_remote(skill_id, version, oss_url, dest_dir)
+                    .await?;
                 Ok(serde_json::json!({ "status": "synced" }))
             }
             "list" => {
                 let names: Option<Vec<String>> = params
                     .get("names")
                     .and_then(|v| serde_json::from_value(v.clone()).ok());
-                let name_refs: Option<Vec<&str>> =
-                    names.as_ref().map(|v| v.iter().map(|s| s.as_str()).collect());
+                let name_refs: Option<Vec<&str>> = names
+                    .as_ref()
+                    .map(|v| v.iter().map(|s| s.as_str()).collect());
                 let result = self.list_metadata(name_refs.as_deref());
                 Ok(serde_json::to_value(result).unwrap_or_default())
             }
@@ -241,11 +246,58 @@ impl SkillService {
                 let count = self.clear();
                 Ok(serde_json::json!({ "cleared": count }))
             }
+            "pack" => {
+                let path = params["path"]
+                    .as_str()
+                    .ok_or_else(|| SkillError::BadRequest("缺少 path 参数".into()))?;
+                let file_path = self.pack_local_directory(path).await?;
+                let contents = tokio::fs::read(&file_path)
+                    .await
+                    .map_err(|e| SkillError::Io(format!("读取打包文件失败: {e}")))?;
+                let _ = tokio::fs::remove_file(&file_path).await;
+                use base64::Engine;
+                let b64 = base64::engine::general_purpose::STANDARD.encode(&contents);
+                Ok(serde_json::json!({
+                    "content": b64,
+                    "encoding": "base64",
+                    "size": contents.len()
+                }))
+            }
             _ => Err(SkillError::BadRequest(format!("未知操作: {action}"))),
         }
     }
 
     // ── 内部实现 ──────────────────────────────────────────
+
+    pub async fn pack_local_directory(&self, path: &str) -> Result<PathBuf, SkillError> {
+        let root = Self::validate_path(path)?;
+        let tmp_path =
+            std::env::temp_dir().join(format!("tab_dl_skill_{}.tar.gz", uuid::Uuid::new_v4()));
+
+        let status = tokio::process::Command::new("tar")
+            .arg("-czf")
+            .arg(&tmp_path)
+            .arg("--exclude=.DS_Store")
+            .arg("--exclude=__MACOSX")
+            .arg("--exclude=__pycache__")
+            .arg("--exclude=node_modules")
+            .arg("--exclude=.git")
+            .arg("-C")
+            .arg(&root)
+            .arg(".")
+            .status()
+            .await
+            .map_err(|e| SkillError::Io(format!("TAR 打包过程出错: {e}")))?;
+
+        if !status.success() {
+            let _ = tokio::fs::remove_file(&tmp_path).await;
+            return Err(SkillError::BadRequest(
+                "打包技能目录失败，tar 返回非 0 状态".into(),
+            ));
+        }
+
+        Ok(tmp_path)
+    }
 
     pub async fn sync_remote(
         &mut self,
@@ -257,15 +309,18 @@ impl SkillService {
         let skills_path = match dest_dir {
             Some(p) => p,
             None => std::env::var("AIO_SKILLS_PATH").map_err(|_| {
-                SkillError::BadRequest("未提供 dest_dir，且系统未配置 AIO_SKILLS_PATH 参数".to_string())
+                SkillError::BadRequest(
+                    "未提供 dest_dir，且系统未配置 AIO_SKILLS_PATH 参数".to_string(),
+                )
             })?,
         };
-        
+
         let root = PathBuf::from(&skills_path.trim_matches('"').trim_matches('\''));
         if !root.exists() {
-            std::fs::create_dir_all(&root).map_err(|e| SkillError::Io(format!("创建目录失败: {e}")))?;
+            std::fs::create_dir_all(&root)
+                .map_err(|e| SkillError::Io(format!("创建目录失败: {e}")))?;
         }
-        
+
         let target_dir = root.join(skill_id);
         let meta_file = target_dir.join(".meta.json");
         // 校验缓存: 如果已有该版本, 则直接挂载
@@ -273,7 +328,12 @@ impl SkillService {
             if let Ok(content) = std::fs::read_to_string(&meta_file) {
                 if let Ok(meta) = serde_json::from_str::<serde_json::Value>(&content) {
                     if meta.get("version").and_then(|v| v.as_str()) == Some(version) {
-                        log::info!("[Skills] {} v{} 已在 {}，无需重新下载", skill_id, version, target_dir.display());
+                        log::info!(
+                            "[Skills] {} v{} 已在 {}，无需重新下载",
+                            skill_id,
+                            version,
+                            target_dir.display()
+                        );
                         if !self.skills.contains_key(skill_id) {
                             self.register_directory(&target_dir.to_string_lossy())?;
                         }
@@ -282,19 +342,31 @@ impl SkillService {
                 }
             }
         }
-        
-        log::info!("[Skills] 下载并部署技能包 {} v{} -> {}", skill_id, version, target_dir.display());
-        
-        let resp = reqwest::get(oss_url).await.map_err(|e| SkillError::Io(format!("下载失败: {e}")))?;
-        let bytes = resp.bytes().await.map_err(|e| SkillError::Io(format!("读取内容失败: {e}")))?;
-        
+
+        log::info!(
+            "[Skills] 下载并部署技能包 {} v{} -> {}",
+            skill_id,
+            version,
+            target_dir.display()
+        );
+
+        let resp = reqwest::get(oss_url)
+            .await
+            .map_err(|e| SkillError::Io(format!("下载失败: {e}")))?;
+        let bytes = resp
+            .bytes()
+            .await
+            .map_err(|e| SkillError::Io(format!("读取内容失败: {e}")))?;
+
         let tmp_path = std::env::temp_dir().join(format!("tab_dl_skill_{}.tar.gz", skill_id));
-        std::fs::write(&tmp_path, &bytes).map_err(|e| SkillError::Io(format!("写入临时文件失败: {e}")))?;
-        
+        std::fs::write(&tmp_path, &bytes)
+            .map_err(|e| SkillError::Io(format!("写入临时文件失败: {e}")))?;
+
         if !target_dir.exists() {
-            std::fs::create_dir_all(&target_dir).map_err(|e| SkillError::Io(format!("创建目标目录失败: {e}")))?;
+            std::fs::create_dir_all(&target_dir)
+                .map_err(|e| SkillError::Io(format!("创建目标目录失败: {e}")))?;
         }
-        
+
         // 借用 tar 解压内容到原地
         let status = tokio::process::Command::new("tar")
             .arg("-xzf")
@@ -304,25 +376,33 @@ impl SkillService {
             .status()
             .await
             .map_err(|e| SkillError::Io(format!("TAR 解析失败: {e}")))?;
-            
+
         let _ = std::fs::remove_file(&tmp_path);
         if !status.success() {
             return Err(SkillError::BadRequest("解压失败，返回非 0 状态".into()));
         }
-        
+
         // 写入版本标志信息
         let meta_file = target_dir.join(".meta.json");
-        let _ = std::fs::write(&meta_file, serde_json::json!({
-            "skill_id": skill_id,
-            "version": version
-        }).to_string());
-        
+        let _ = std::fs::write(
+            &meta_file,
+            serde_json::json!({
+                "skill_id": skill_id,
+                "version": version
+            })
+            .to_string(),
+        );
+
         // 覆盖卸载旧缓存
         let _ = self.delete(skill_id);
-        
+
         // 自动注册挂载
         let res = self.register_directory(&target_dir.to_string_lossy())?;
-        log::info!("[Skills] {} 已部署完毕, 当前已挂载技能数目: {}", skill_id, res.count);
+        log::info!(
+            "[Skills] {} 已部署完毕, 当前已挂载技能数目: {}",
+            skill_id,
+            res.count
+        );
         Ok(())
     }
 
@@ -353,10 +433,7 @@ impl SkillService {
                 for item in pending {
                     self.finalize_registration(item);
                 }
-                log::info!(
-                    "[Skills] 从 AIO_SKILLS_PATH 自动挂载 {} 个技能",
-                    count
-                );
+                log::info!("[Skills] 从 AIO_SKILLS_PATH 自动挂载 {} 个技能", count);
             }
             Err(e) => {
                 log::error!("[Skills] 自动挂载失败: {}", e);
@@ -364,10 +441,7 @@ impl SkillService {
         }
     }
 
-    fn prepare_skills(
-        &self,
-        skill_files: &[PathBuf],
-    ) -> Result<Vec<PendingSkill>, SkillError> {
+    fn prepare_skills(&self, skill_files: &[PathBuf]) -> Result<Vec<PendingSkill>, SkillError> {
         let mut pending = Vec::new();
         for skill_file in skill_files {
             let (metadata, _) = Self::parse_skill_file(skill_file)?;
@@ -404,12 +478,10 @@ impl SkillService {
         Ok(pending)
     }
 
-    fn validate_pending(
-        &self,
-        pending: &[PendingSkill],
-    ) -> Result<(), SkillError> {
+    fn validate_pending(&self, pending: &[PendingSkill]) -> Result<(), SkillError> {
         let existing_names: HashSet<&str> = self.skills.keys().map(|s| s.as_str()).collect();
-        let existing_paths: HashSet<&Path> = self.skills.values().map(|r| r.path.as_path()).collect();
+        let existing_paths: HashSet<&Path> =
+            self.skills.values().map(|r| r.path.as_path()).collect();
         let mut seen_names: HashMap<&str, &Path> = HashMap::new();
 
         for item in pending {
@@ -420,10 +492,7 @@ impl SkillService {
                 )));
             }
             if existing_names.contains(item.name.as_str()) {
-                return Err(SkillError::BadRequest(format!(
-                    "名称已注册: {}",
-                    item.name
-                )));
+                return Err(SkillError::BadRequest(format!("名称已注册: {}", item.name)));
             }
             if let Some(prev) = seen_names.get(item.name.as_str()) {
                 return Err(SkillError::BadRequest(format!(
@@ -480,10 +549,7 @@ impl SkillService {
             .map(|i| i + 1);
 
         let closing_idx = closing.ok_or_else(|| {
-            SkillError::BadRequest(format!(
-                "SKILL.md front matter 未闭合: {}",
-                path.display()
-            ))
+            SkillError::BadRequest(format!("SKILL.md front matter 未闭合: {}", path.display()))
         })?;
 
         let front_matter_text: String = lines[1..closing_idx].join("\n");
@@ -558,8 +624,14 @@ impl SkillService {
         if pkg_file.exists() {
             if let Ok(content) = std::fs::read_to_string(&pkg_file) {
                 if let Ok(pkg) = serde_json::from_str::<serde_json::Value>(&content) {
-                    let has_deps = pkg.get("dependencies").and_then(|v| v.as_object()).map_or(false, |m| !m.is_empty())
-                        || pkg.get("devDependencies").and_then(|v| v.as_object()).map_or(false, |m| !m.is_empty());
+                    let has_deps = pkg
+                        .get("dependencies")
+                        .and_then(|v| v.as_object())
+                        .map_or(false, |m| !m.is_empty())
+                        || pkg
+                            .get("devDependencies")
+                            .and_then(|v| v.as_object())
+                            .map_or(false, |m| !m.is_empty());
                     if has_deps {
                         commands.push(DependencyCommand {
                             command: vec![

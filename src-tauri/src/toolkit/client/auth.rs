@@ -4,10 +4,10 @@
 // Connector 的 app_id/secret → TAT
 // OAuthCredential → UAT（过期自动 refresh）
 
+use serde::Deserialize;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use serde::Deserialize;
 
 /// 飞书 Token 响应
 #[derive(Debug, Deserialize)]
@@ -40,8 +40,8 @@ struct TokenCache {
 impl TokenProvider {
     /// 从环境变量创建
     pub fn from_env() -> Self {
-        let backend_url = std::env::var("BACKEND_URL")
-            .unwrap_or_else(|_| "http://localhost:8000".to_string());
+        let backend_url =
+            std::env::var("BACKEND_URL").unwrap_or_else(|_| "http://localhost:8000".to_string());
         Self::new(backend_url)
     }
 
@@ -84,10 +84,10 @@ impl TokenProvider {
 
     /// 创建使用 UAT 的 TabClient (代表用户操作)
     pub async fn create_user_client(&self) -> Result<super::TabClient, super::TabClientError> {
-        let uat = self.get_uat().await?
-            .ok_or_else(|| super::TabClientError::Other(
-                "用户未授权飞书，UAT 不可用".into()
-            ))?;
+        let uat = self
+            .get_uat()
+            .await?
+            .ok_or_else(|| super::TabClientError::Other("用户未授权飞书，UAT 不可用".into()))?;
         Ok(super::TabClient::new(uat))
     }
 
@@ -137,9 +137,9 @@ impl TokenProvider {
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
             let body = resp.text().await.unwrap_or_default();
-            return Err(super::TabClientError::Other(
-                format!("后端返回 {status}: {body}")
-            ));
+            return Err(super::TabClientError::Other(format!(
+                "后端返回 {status}: {body}"
+            )));
         }
 
         let tokens: FeishuTokens = resp.json().await.map_err(super::TabClientError::Http)?;

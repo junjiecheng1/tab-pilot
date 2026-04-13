@@ -18,16 +18,10 @@ pub async fn list_doc_blocks(
         params.push(("page_token", pt.to_string()));
     }
 
-    let str_params: Vec<(&str, &str)> = params
-        .iter()
-        .map(|(k, v)| (*k, v.as_str()))
-        .collect();
+    let str_params: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
     client
-        .get(
-            &format!("/docx/v1/documents/{doc_id}/blocks"),
-            &str_params,
-        )
+        .get(&format!("/docx/v1/documents/{doc_id}/blocks"), &str_params)
         .await
 }
 
@@ -61,17 +55,11 @@ pub async fn batch_get_doc_info(
     if with_stats {
         body["with_url"] = json!(true);
     }
-    client
-        .post("/drive/v1/metas/batch_query", &body)
-        .await
+    client.post("/drive/v1/metas/batch_query", &body).await
 }
 
 /// 获取文档评论
-pub async fn get_comments(
-    client: &TabClient,
-    file_token: &str,
-    file_type: &str,
-) -> Result<Value> {
+pub async fn get_comments(client: &TabClient, file_token: &str, file_type: &str) -> Result<Value> {
     client
         .get(
             &format!("/drive/v1/files/{file_token}/comments"),
@@ -92,20 +80,12 @@ pub async fn add_comment(
         "content": content,
     });
     client
-        .post(
-            &format!("/drive/v1/files/{file_token}/comments"),
-            &body,
-        )
+        .post(&format!("/drive/v1/files/{file_token}/comments"), &body)
         .await
 }
 
 /// 解析文档 URL
-pub async fn parse_doc_urls(
-    client: &TabClient,
-    urls: &[String],
-) -> Result<Value> {
+pub async fn parse_doc_urls(client: &TabClient, urls: &[String]) -> Result<Value> {
     let body = json!({ "urls": urls });
-    client
-        .post("/drive/v1/metas/batch_query", &body)
-        .await
+    client.post("/drive/v1/metas/batch_query", &body).await
 }

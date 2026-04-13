@@ -169,8 +169,7 @@ impl McpClient {
     /// 获取配置文件路径
     pub fn config_path_from_env() -> PathBuf {
         PathBuf::from(
-            std::env::var("MCP_SERVERS_CONFIG")
-                .unwrap_or_else(|_| "mcp-servers.json".into()),
+            std::env::var("MCP_SERVERS_CONFIG").unwrap_or_else(|_| "mcp-servers.json".into()),
         )
     }
 }

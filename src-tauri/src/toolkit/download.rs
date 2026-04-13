@@ -2,8 +2,8 @@
 //
 // 供 tab-pdf、tab-xlsx 等 toolkit 命令复用的 URL → 本地文件下载逻辑
 
-use std::path::{Path, PathBuf};
 use crate::core::error::ServiceError;
+use std::path::{Path, PathBuf};
 
 /// 下载后的本地文件 (可能是临时的)
 pub enum ResolvedInput {
@@ -49,11 +49,13 @@ async fn download_file(url: &str, ext: &str) -> Result<PathBuf, ServiceError> {
 
     if !resp.status().is_success() {
         return Err(ServiceError::internal(format!(
-            "下载失败: HTTP {}", resp.status()
+            "下载失败: HTTP {}",
+            resp.status()
         )));
     }
 
-    let bytes = resp.bytes()
+    let bytes = resp
+        .bytes()
         .await
         .map_err(|e| ServiceError::internal(format!("读取失败: {e}")))?;
 
@@ -67,7 +69,11 @@ async fn download_file(url: &str, ext: &str) -> Result<PathBuf, ServiceError> {
 
     let tmp_path = std::env::temp_dir().join(format!(
         "tab_dl_{}.{}",
-        uuid::Uuid::new_v4().to_string().split('-').next().unwrap_or("tmp"),
+        uuid::Uuid::new_v4()
+            .to_string()
+            .split('-')
+            .next()
+            .unwrap_or("tmp"),
         ext
     ));
 

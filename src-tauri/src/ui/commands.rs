@@ -1,8 +1,9 @@
 // Tauri Commands — 前端 invoke() 直连内存
 
+use crate::infra::tools::{tool_list, ToolsManager};
+use crate::router::AppState;
 use serde::Serialize;
 use tauri::State;
-use crate::router::AppState;
 
 #[derive(Serialize)]
 pub struct StatusResponse {
@@ -20,6 +21,7 @@ pub struct StatusResponse {
     pub user_id: String,
     pub user_display: String,
     pub tools_ready: bool,
+    pub tool_names: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -44,17 +46,28 @@ pub async fn get_status(state: State<'_, AppState>) -> Result<StatusResponse, St
     let guard = state.guard.read().await;
 
     // 所有可变设置从 store 读 (单一源), config 做 fallback
-    let workspace = state.store
+    let workspace = state
+        .store
         .get_str("settings", "workspace")
         .unwrap_or_else(|| state.config.workspace.clone());
-    let browser_enabled = state.store
+    let browser_enabled = state
+        .store
         .get_str("settings", "browser_enabled")
         .map(|v| v == "true")
         .unwrap_or(true);
-    let audit_enabled = state.store
+    let audit_enabled = state
+        .store
         .get_str("settings", "audit_enabled")
         .map(|v| v == "true")
         .unwrap_or(true);
+    let tools_mgr = ToolsManager::new(
+        &std::path::PathBuf::from("/unused"),
+        &state.config.tools_oss_url,
+    );
+    let tool_names = tool_list()
+        .into_iter()
+        .map(|(name, _, _)| name.to_string())
+        .collect();
 
     Ok(StatusResponse {
         running: true,
@@ -70,10 +83,8 @@ pub async fn get_status(state: State<'_, AppState>) -> Result<StatusResponse, St
         audit_enabled,
         user_id: auth.user_id.clone(),
         user_display: auth.user_display.clone(),
-        tools_ready: dirs::home_dir()
-            .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
-            .join(".tabpilot/runtime/tools/.tools-ready")
-            .exists(),
+        tools_ready: tools_mgr.is_ready(),
+        tool_names,
     })
 }
 
@@ -138,22 +149,20 @@ pub async fn start_auth_poll(
 
 /// 设置安全模式
 #[tauri::command]
-pub async fn set_guard_mode(
-    state: State<'_, AppState>,
-    mode: String,
-) -> Result<String, String> {
+pub async fn set_guard_mode(state: State<'_, AppState>, mode: String) -> Result<String, String> {
     state.guard.write().await.set_mode(&mode);
-    state.store.set("settings", "guard_mode", serde_json::json!(mode));
+    state
+        .store
+        .set("settings", "guard_mode", serde_json::json!(mode));
     Ok("ok".to_string())
 }
 
 /// 设置工作目录
 #[tauri::command]
-pub async fn set_workspace(
-    state: State<'_, AppState>,
-    path: String,
-) -> Result<String, String> {
-    state.store.set("settings", "workspace", serde_json::json!(path));
+pub async fn set_workspace(state: State<'_, AppState>, path: String) -> Result<String, String> {
+    state
+        .store
+        .set("settings", "workspace", serde_json::json!(path));
     Ok("ok".to_string())
 }
 
@@ -163,7 +172,11 @@ pub async fn set_browser_enabled(
     state: State<'_, AppState>,
     enabled: bool,
 ) -> Result<String, String> {
-    state.store.set("settings", "browser_enabled", serde_json::json!(enabled.to_string()));
+    state.store.set(
+        "settings",
+        "browser_enabled",
+        serde_json::json!(enabled.to_string()),
+    );
     Ok("ok".to_string())
 }
 
@@ -173,7 +186,11 @@ pub async fn set_audit_enabled(
     state: State<'_, AppState>,
     enabled: bool,
 ) -> Result<String, String> {
-    state.store.set("settings", "audit_enabled", serde_json::json!(enabled.to_string()));
+    state.store.set(
+        "settings",
+        "audit_enabled",
+        serde_json::json!(enabled.to_string()),
+    );
     Ok("ok".to_string())
 }
 
@@ -209,7 +226,8 @@ pub async fn get_protected_paths(state: State<'_, AppState>) -> Result<Vec<Strin
 /// 获取托盘图标可见性
 #[tauri::command]
 pub async fn get_tray_visible(state: State<'_, AppState>) -> Result<bool, String> {
-    let visible = state.store
+    let visible = state
+        .store
         .get_str("settings", "tray_visible")
         .map(|v| v != "false")
         .unwrap_or(true); // 默认开启
@@ -223,7 +241,11 @@ pub async fn set_tray_visible(
     state: State<'_, AppState>,
     visible: bool,
 ) -> Result<String, String> {
-    state.store.set("settings", "tray_visible", serde_json::json!(visible.to_string()));
+    state.store.set(
+        "settings",
+        "tray_visible",
+        serde_json::json!(visible.to_string()),
+    );
 
     // 操作托盘图标
     if let Some(tray) = app.tray_by_id("main") {
@@ -240,7 +262,9 @@ pub async fn browser_action(
     action: String,
 ) -> Result<serde_json::Value, String> {
     let params = serde_json::json!({});
-    state.app.browser
+    state
+        .app
+        .browser
         .handle(&action, params)
         .await
         .map_err(|e| e.to_string())
@@ -262,11 +286,14 @@ pub async fn read_shell_output(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<String, String> {
-    let result = state.app.shell
-        .view_session(&session_id)
+    let result = state
+        .app
+        .shell
+        .view_session(&session_id, None)
         .await
         .map_err(|e| e.to_string())?;
-    Ok(result.get("output")
+    Ok(result
+        .get("output")
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string())
@@ -278,7 +305,9 @@ pub async fn kill_shell_session(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<String, String> {
-    state.app.shell
+    state
+        .app
+        .shell
         .kill_session(&session_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -296,7 +325,9 @@ pub async fn exec_shell_command(
         "command": command,
         "timeout": timeout.unwrap_or(30),
     });
-    state.app.shell
+    state
+        .app
+        .shell
         .handle("exec", params)
         .await
         .map_err(|e| e.to_string())

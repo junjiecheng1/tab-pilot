@@ -2,9 +2,9 @@
 //
 // Agent: bash("tab-base export --app bascnXXX --table tblYYY")
 
-use serde_json::{json, Value};
 use crate::core::error::{ServiceError, ServiceResult};
 use crate::toolkit::client::TabClient;
+use serde_json::{json, Value};
 
 pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
     let subcmd = args.first().map(|s| s.as_str()).unwrap_or("help");
@@ -30,7 +30,9 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
                 app_name.as_deref(),
                 table_name.as_deref(),
                 folder_token.as_deref(),
-            ).await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+            )
+            .await
+            .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "delete-rows" => {
@@ -42,7 +44,8 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
                 .map_err(|e| ServiceError::bad_request(format!("--values JSON 解析失败: {e}")))?;
 
             let result = super::delete::delete_rows(client, &app, &table, &key_field, &values)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "delete-field" => {
@@ -51,7 +54,8 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             let field = named_arg(args, "--field")?;
 
             let result = super::delete::delete_field(client, &app, &table, &field)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "export" => {
@@ -60,28 +64,33 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             let include_id = has_flag(args, "--include-id");
 
             let result = super::export::export_table(client, &app, &table, include_id)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "export-all" => {
             let app = named_arg(args, "--app")?;
             let tables_str = named_arg(args, "--tables").ok();
-            let tables: Option<Vec<String>> = tables_str.and_then(|s| serde_json::from_str(&s).ok());
+            let tables: Option<Vec<String>> =
+                tables_str.and_then(|s| serde_json::from_str(&s).ok());
             let include_id = has_flag(args, "--include-id");
 
             let result = super::export::export_tables(client, &app, tables.as_deref(), include_id)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "upload" => {
             let files_str = named_arg(args, "--files")?;
             let files: Vec<String> = serde_json::from_str(&files_str)
                 .map_err(|e| ServiceError::bad_request(format!("--files JSON 解析失败: {e}")))?;
-            let parent_type = named_arg(args, "--parent-type").unwrap_or_else(|_| "explorer".to_string());
+            let parent_type =
+                named_arg(args, "--parent-type").unwrap_or_else(|_| "explorer".to_string());
             let parent_node = named_arg(args, "--parent-node")?;
 
             let result = super::file_ops::upload_files(client, &files, &parent_type, &parent_node)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "download" => {
@@ -91,11 +100,13 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             let dir = named_arg(args, "--output").unwrap_or_else(|_| "./downloads".to_string());
 
             let result = super::file_ops::download_files(client, &tokens, &dir)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "parse-url" => {
-            let url = args.get(1)
+            let url = args
+                .get(1)
                 .ok_or_else(|| ServiceError::bad_request("tab-base parse-url: 缺少 URL"))?;
             let parsed = super::parser::parse_bitable_url(url);
             wrap(serde_json::to_value(parsed).unwrap_or_default())
@@ -111,7 +122,9 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             "output": HELP,
             "exit_code": 0,
         })),
-        _ => Err(ServiceError::bad_request(format!("tab-base: 未知命令 '{subcmd}'"))),
+        _ => Err(ServiceError::bad_request(format!(
+            "tab-base: 未知命令 '{subcmd}'"
+        ))),
     }
 }
 

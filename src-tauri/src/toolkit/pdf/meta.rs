@@ -2,14 +2,14 @@
 //
 // 移植自: aily_pdf/cmd_meta.py (94行)
 
-use std::path::Path;
-use serde_json::{json, Value};
 use crate::toolkit::client::TabClientError;
+use serde_json::{json, Value};
+use std::path::Path;
 
 /// 读取 PDF 元数据
 pub fn read_metadata(path: &Path) -> Result<Value, TabClientError> {
-    let doc = lopdf::Document::load(path)
-        .map_err(|e| TabClientError::Other(format!("无法打开: {e}")))?;
+    let doc =
+        lopdf::Document::load(path).map_err(|e| TabClientError::Other(format!("无法打开: {e}")))?;
 
     let page_count = doc.get_pages().len();
 
@@ -23,9 +23,7 @@ pub fn read_metadata(path: &Path) -> Result<Value, TabClientError> {
                 for (key, val) in info_dict.iter() {
                     let k = String::from_utf8_lossy(key).to_string();
                     let v = match val {
-                        lopdf::Object::String(s, _) => {
-                            String::from_utf8_lossy(s).to_string()
-                        }
+                        lopdf::Object::String(s, _) => String::from_utf8_lossy(s).to_string(),
                         other => format!("{other:?}"),
                     };
                     info.insert(k, json!(v));
@@ -49,7 +47,8 @@ pub fn set_metadata(
     let mut doc = lopdf::Document::load(input)
         .map_err(|e| TabClientError::Other(format!("无法打开: {e}")))?;
 
-    let entries = metadata.as_object()
+    let entries = metadata
+        .as_object()
         .ok_or_else(|| TabClientError::InvalidParam("metadata must be object".into()))?;
 
     // 获取或创建 Info dict 的 object id
@@ -70,10 +69,7 @@ pub fn set_metadata(
             if let Ok(dict) = obj.as_dict_mut() {
                 dict.set(
                     key.as_bytes(),
-                    lopdf::Object::String(
-                        val_str.into_bytes(),
-                        lopdf::StringFormat::Literal,
-                    ),
+                    lopdf::Object::String(val_str.into_bytes(), lopdf::StringFormat::Literal),
                 );
                 set_count += 1;
             }

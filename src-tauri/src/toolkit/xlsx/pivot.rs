@@ -2,10 +2,10 @@
 //
 // 移植自: cmd_pivot (200行)
 
+use crate::toolkit::client::TabClientError;
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::Path;
-use serde_json::{json, Value};
-use crate::toolkit::client::TabClientError;
 
 /// 生成透视表
 pub fn create_pivot(
@@ -16,10 +16,10 @@ pub fn create_pivot(
     value_field: &str,
     agg: &str, // sum, avg, count, min, max
 ) -> Result<Value, TabClientError> {
-    use calamine::{open_workbook_auto, Reader, Data};
+    use calamine::{open_workbook_auto, Data, Reader};
 
-    let mut workbook = open_workbook_auto(path)
-        .map_err(|e| TabClientError::Other(format!("无法打开: {e}")))?;
+    let mut workbook =
+        open_workbook_auto(path).map_err(|e| TabClientError::Other(format!("无法打开: {e}")))?;
 
     let name = sheet_name
         .map(String::from)
@@ -37,12 +37,20 @@ pub fn create_pivot(
 
     // 找到列索引
     let headers: Vec<String> = rows[0].iter().map(|c| cell_str(c)).collect();
-    let row_idx = headers.iter().position(|h| h == row_field)
+    let row_idx = headers
+        .iter()
+        .position(|h| h == row_field)
         .ok_or_else(|| TabClientError::InvalidParam(format!("Row field not found: {row_field}")))?;
-    let col_idx = headers.iter().position(|h| h == col_field)
+    let col_idx = headers
+        .iter()
+        .position(|h| h == col_field)
         .ok_or_else(|| TabClientError::InvalidParam(format!("Col field not found: {col_field}")))?;
-    let val_idx = headers.iter().position(|h| h == value_field)
-        .ok_or_else(|| TabClientError::InvalidParam(format!("Value field not found: {value_field}")))?;
+    let val_idx = headers
+        .iter()
+        .position(|h| h == value_field)
+        .ok_or_else(|| {
+            TabClientError::InvalidParam(format!("Value field not found: {value_field}"))
+        })?;
 
     // 聚合
     let mut pivot: HashMap<String, HashMap<String, Vec<f64>>> = HashMap::new();
@@ -97,7 +105,9 @@ pub fn create_pivot(
 }
 
 fn aggregate(vals: &[f64], agg: &str) -> f64 {
-    if vals.is_empty() { return 0.0; }
+    if vals.is_empty() {
+        return 0.0;
+    }
     match agg {
         "sum" => vals.iter().sum(),
         "avg" => vals.iter().sum::<f64>() / vals.len() as f64,

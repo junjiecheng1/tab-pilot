@@ -2,9 +2,9 @@
 //
 // Agent: bash("tab-doc info --doc doccnXXX")
 
-use serde_json::{json, Value};
 use crate::core::error::{ServiceError, ServiceResult};
 use crate::toolkit::client::TabClient;
+use serde_json::{json, Value};
 
 pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
     let subcmd = args.first().map(|s| s.as_str()).unwrap_or("help");
@@ -13,16 +13,20 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
         "list" => {
             let doc_id = named_arg(args, "--doc")?;
             let page_size: i32 = named_arg(args, "--limit")
-                .ok().and_then(|s| s.parse().ok()).unwrap_or(50);
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(50);
             let result = super::info::list_doc(client, &doc_id, page_size)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "info" => {
             // get_doc_info(client, doc_id)
             let doc_id = named_arg(args, "--doc")?;
             let result = super::info::get_doc_info(client, &doc_id)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "search" => {
@@ -31,7 +35,8 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             let owner_str = named_arg(args, "--owners").ok();
             let owners: Option<Vec<String>> = owner_str.and_then(|s| serde_json::from_str(&s).ok());
             let result = super::info::search_docs(client, &query, owners.as_deref())
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "batch-info" => {
@@ -40,7 +45,8 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             let urls: Vec<String> = serde_json::from_str(&urls_str)
                 .map_err(|e| ServiceError::bad_request(format!("--urls JSON 解析失败: {e}")))?;
             let result = super::info::batch_get_info(client, &urls)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "parse-urls" => {
@@ -49,7 +55,8 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             let urls: Vec<String> = serde_json::from_str(&urls_str)
                 .map_err(|e| ServiceError::bad_request(format!("--urls JSON 解析失败: {e}")))?;
             let result = super::info::parse_urls(client, &urls)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "comments" => {
@@ -58,7 +65,8 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             let file_type = named_arg(args, "--type").unwrap_or_else(|_| "doc".to_string());
             let resolve = has_flag(args, "--resolve-users");
             let result = super::comments::get_comments(client, &token, &file_type, resolve)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "add-comment" => {
@@ -67,14 +75,17 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             let file_type = named_arg(args, "--type").unwrap_or_else(|_| "doc".to_string());
             let content = named_arg(args, "--content")?;
             let result = super::comments::add_comment(client, &token, &file_type, &content)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "help" | "--help" | "-h" => Ok(json!({
             "output": HELP,
             "exit_code": 0,
         })),
-        _ => Err(ServiceError::bad_request(format!("tab-doc: 未知命令 '{subcmd}'"))),
+        _ => Err(ServiceError::bad_request(format!(
+            "tab-doc: 未知命令 '{subcmd}'"
+        ))),
     }
 }
 

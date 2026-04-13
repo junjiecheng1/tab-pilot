@@ -3,9 +3,9 @@
 // Agent: bash("tab-xlsx inspect file.xlsx --pretty")
 //        bash("tab-xlsx inspect https://example.com/data.xlsx")
 
-use serde_json::{json, Value};
 use crate::core::error::{ServiceError, ServiceResult};
 use crate::toolkit::download::resolve_input;
+use serde_json::{json, Value};
 
 /// 分发 tab-xlsx 子命令 (async: 支持 URL 下载)
 pub async fn dispatch(args: &[String]) -> ServiceResult {
@@ -54,9 +54,14 @@ pub async fn dispatch(args: &[String]) -> ServiceResult {
             let agg = named_opt(args, "--agg").unwrap_or_else(|| "sum".to_string());
 
             let result = super::pivot::create_pivot(
-                local.path(), sheet.as_deref(),
-                &row_field, &col_field, &value_field, &agg,
-            ).map_err(|e| ServiceError::internal(format!("{e}")))?;
+                local.path(),
+                sheet.as_deref(),
+                &row_field,
+                &col_field,
+                &value_field,
+                &agg,
+            )
+            .map_err(|e| ServiceError::internal(format!("{e}")))?;
             local.cleanup();
             wrap(result, has_flag(args, "--pretty"))
         }
@@ -64,9 +69,9 @@ pub async fn dispatch(args: &[String]) -> ServiceResult {
             "output": HELP,
             "exit_code": 0,
         })),
-        _ => Err(ServiceError::bad_request(
-            format!("tab-xlsx: 未知命令 '{subcmd}'. 运行 'tab-xlsx help' 查看帮助.")
-        )),
+        _ => Err(ServiceError::bad_request(format!(
+            "tab-xlsx: 未知命令 '{subcmd}'. 运行 'tab-xlsx help' 查看帮助."
+        ))),
     }
 }
 
@@ -130,6 +135,7 @@ fn wrap(data: Value, pretty: bool) -> ServiceResult {
         serde_json::to_string_pretty(&data)
     } else {
         serde_json::to_string(&data)
-    }.unwrap_or_default();
+    }
+    .unwrap_or_default();
     Ok(json!({"output": output, "exit_code": 0}))
 }

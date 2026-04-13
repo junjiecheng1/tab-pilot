@@ -45,7 +45,9 @@ impl HttpSession {
             "params": params,
         });
 
-        let mut req = self.client.post(&self.url)
+        let mut req = self
+            .client
+            .post(&self.url)
             .header("Content-Type", "application/json");
 
         if let Some(ref sid) = self.session_id {
@@ -64,27 +66,44 @@ impl HttpSession {
             return Err(format!("MCP error: {}", error));
         }
 
-        Ok(json.get("result").cloned().unwrap_or(serde_json::Value::Null))
+        Ok(json
+            .get("result")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null))
     }
 
     pub async fn initialize(&mut self) -> Result<(), String> {
-        self.rpc("initialize", serde_json::json!({
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": { "name": "TabPilot", "version": "0.2.0" }
-        })).await?;
+        self.rpc(
+            "initialize",
+            serde_json::json!({
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": { "name": "TabPilot", "version": "0.2.0" }
+            }),
+        )
+        .await?;
         Ok(())
     }
 
     pub async fn list_tools(&mut self) -> Result<Vec<serde_json::Value>, String> {
         let result = self.rpc("tools/list", serde_json::json!({})).await?;
-        Ok(result.get("tools").and_then(|t| t.as_array()).cloned().unwrap_or_default())
+        Ok(result
+            .get("tools")
+            .and_then(|t| t.as_array())
+            .cloned()
+            .unwrap_or_default())
     }
 
     pub async fn call_tool(
-        &mut self, name: &str, args: serde_json::Value,
+        &mut self,
+        name: &str,
+        args: serde_json::Value,
     ) -> Result<serde_json::Value, String> {
-        self.rpc("tools/call", serde_json::json!({ "name": name, "arguments": args })).await
+        self.rpc(
+            "tools/call",
+            serde_json::json!({ "name": name, "arguments": args }),
+        )
+        .await
     }
 }
 
@@ -126,8 +145,14 @@ impl StdioSession {
             .spawn()
             .map_err(|e| format!("启动 MCP 服务器 {:?} 失败: {e}", cmd))?;
 
-        let stdin = child.stdin.take().ok_or("获取 MCP stdin 失败".to_string())?;
-        let stdout = child.stdout.take().ok_or("获取 MCP stdout 失败".to_string())?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or("获取 MCP stdin 失败".to_string())?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or("获取 MCP stdout 失败".to_string())?;
 
         Ok(Self {
             _child: child,
@@ -139,7 +164,9 @@ impl StdioSession {
 
     /// JSON-RPC over stdio
     async fn rpc(
-        &mut self, method: &str, params: serde_json::Value,
+        &mut self,
+        method: &str,
+        params: serde_json::Value,
     ) -> Result<serde_json::Value, String> {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let msg = serde_json::json!({
@@ -147,46 +174,69 @@ impl StdioSession {
         });
 
         let line = format!("{}\n", msg);
-        self.stdin.write_all(line.as_bytes()).await
+        self.stdin
+            .write_all(line.as_bytes())
+            .await
             .map_err(|e| format!("写入 MCP 失败: {e}"))?;
-        self.stdin.flush().await
+        self.stdin
+            .flush()
+            .await
             .map_err(|e| format!("flush MCP 失败: {e}"))?;
 
         let mut resp_line = String::new();
-        self.stdout.read_line(&mut resp_line).await
+        self.stdout
+            .read_line(&mut resp_line)
+            .await
             .map_err(|e| format!("读取 MCP 失败: {e}"))?;
 
         if resp_line.is_empty() {
             return Err("MCP 进程已退出".to_string());
         }
 
-        let resp: serde_json::Value = serde_json::from_str(&resp_line)
-            .map_err(|e| format!("解析 MCP 响应失败: {e}"))?;
+        let resp: serde_json::Value =
+            serde_json::from_str(&resp_line).map_err(|e| format!("解析 MCP 响应失败: {e}"))?;
 
         if let Some(error) = resp.get("error") {
             return Err(format!("MCP: {}", error));
         }
 
-        Ok(resp.get("result").cloned().unwrap_or(serde_json::Value::Null))
+        Ok(resp
+            .get("result")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null))
     }
 
     pub async fn initialize(&mut self) -> Result<(), String> {
-        self.rpc("initialize", serde_json::json!({
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": { "name": "TabPilot", "version": "0.2.0" }
-        })).await?;
+        self.rpc(
+            "initialize",
+            serde_json::json!({
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": { "name": "TabPilot", "version": "0.2.0" }
+            }),
+        )
+        .await?;
         Ok(())
     }
 
     pub async fn list_tools(&mut self) -> Result<Vec<serde_json::Value>, String> {
         let result = self.rpc("tools/list", serde_json::json!({})).await?;
-        Ok(result.get("tools").and_then(|t| t.as_array()).cloned().unwrap_or_default())
+        Ok(result
+            .get("tools")
+            .and_then(|t| t.as_array())
+            .cloned()
+            .unwrap_or_default())
     }
 
     pub async fn call_tool(
-        &mut self, name: &str, args: serde_json::Value,
+        &mut self,
+        name: &str,
+        args: serde_json::Value,
     ) -> Result<serde_json::Value, String> {
-        self.rpc("tools/call", serde_json::json!({ "name": name, "arguments": args })).await
+        self.rpc(
+            "tools/call",
+            serde_json::json!({ "name": name, "arguments": args }),
+        )
+        .await
     }
 }

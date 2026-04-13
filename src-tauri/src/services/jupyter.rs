@@ -86,7 +86,8 @@ impl JupyterService {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        let child = cmd.spawn()
+        let child = cmd
+            .spawn()
             .map_err(|e| ServiceError::internal(format!("Python 启动失败: {e}")))?;
 
         let output = tokio::time::timeout(
@@ -106,11 +107,13 @@ impl JupyterService {
         // 更新会话
         {
             let mut sessions = self.sessions.write().await;
-            let session = sessions.entry(sid.clone()).or_insert_with(|| JupyterSession {
-                kernel_name: kernel.to_string(),
-                last_used: Instant::now(),
-                execution_count: 0,
-            });
+            let session = sessions
+                .entry(sid.clone())
+                .or_insert_with(|| JupyterSession {
+                    kernel_name: kernel.to_string(),
+                    last_used: Instant::now(),
+                    execution_count: 0,
+                });
             session.last_used = Instant::now();
             session.execution_count += 1;
         }
@@ -198,7 +201,9 @@ impl JupyterService {
                 self.cleanup_session(sid).await
             }
             "cleanup_all" => self.cleanup_all().await,
-            _ => Err(ServiceError::bad_request(format!("未知 jupyter 操作: {action}"))),
+            _ => Err(ServiceError::bad_request(format!(
+                "未知 jupyter 操作: {action}"
+            ))),
         }
     }
 

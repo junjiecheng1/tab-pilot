@@ -31,10 +31,7 @@ pub async fn upload_file(
 }
 
 /// 下载文件
-pub async fn download_file(
-    client: &TabClient,
-    file_token: &str,
-) -> Result<Vec<u8>> {
+pub async fn download_file(client: &TabClient, file_token: &str) -> Result<Vec<u8>> {
     client
         .get_bytes(&format!("/drive/v1/medias/{file_token}/download"))
         .await

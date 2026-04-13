@@ -77,7 +77,7 @@ impl NodeJsService {
             if nm_src.exists() && !nm_dst.exists() {
                 #[cfg(unix)]
                 let _ = std::os::unix::fs::symlink(&nm_src, &nm_dst);
-                
+
                 #[cfg(windows)]
                 let _ = std::os::windows::fs::symlink_dir(&nm_src, &nm_dst);
             }
@@ -107,7 +107,11 @@ impl NodeJsService {
             let existing = env_vars.get("NODE_PATH").cloned().unwrap_or_default();
             env_vars.insert(
                 "NODE_PATH".into(),
-                if existing.is_empty() { nm } else { format!("{nm}:{existing}") },
+                if existing.is_empty() {
+                    nm
+                } else {
+                    format!("{nm}:{existing}")
+                },
             );
         }
 
@@ -283,13 +287,16 @@ impl NodeJsService {
                 let sid = params["session_id"].as_str();
                 let cwd = params["cwd"].as_str();
                 let version = params["version"].as_str();
-                self.execute_stateful(code, timeout, sid, cwd, version).await
+                self.execute_stateful(code, timeout, sid, cwd, version)
+                    .await
             }
             "info" | "runtime_info" => {
                 let version = params["version"].as_str();
                 self.get_runtime_info(version)
             }
-            _ => Err(ServiceError::bad_request(format!("未知 nodejs 操作: {action}"))),
+            _ => Err(ServiceError::bad_request(format!(
+                "未知 nodejs 操作: {action}"
+            ))),
         }
     }
 }

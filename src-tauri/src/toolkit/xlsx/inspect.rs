@@ -2,13 +2,13 @@
 //
 // calamine 读取 + 列类型推断
 
-use std::path::Path;
-use serde_json::{json, Value};
 use crate::toolkit::client::TabClientError;
+use serde_json::{json, Value};
+use std::path::Path;
 
 /// 分析 Excel 文件结构
 pub fn inspect_file(path: &Path) -> Result<Value, TabClientError> {
-    use calamine::{open_workbook_auto, Reader, Data};
+    use calamine::{open_workbook_auto, Data, Reader};
 
     let mut workbook = open_workbook_auto(path)
         .map_err(|e| TabClientError::Other(format!("无法打开文件: {e}")))?;
@@ -39,7 +39,9 @@ pub fn inspect_file(path: &Path) -> Result<Value, TabClientError> {
                         let t = match cell {
                             Data::Int(_) | Data::Float(_) => "number",
                             Data::Bool(_) => "boolean",
-                            Data::DateTime(_) | Data::DateTimeIso(_) | Data::DurationIso(_) => "datetime",
+                            Data::DateTime(_) | Data::DateTimeIso(_) | Data::DurationIso(_) => {
+                                "datetime"
+                            }
                             Data::String(s) if s.starts_with("http") => "url",
                             Data::String(_) => "text",
                             Data::Empty => "empty",

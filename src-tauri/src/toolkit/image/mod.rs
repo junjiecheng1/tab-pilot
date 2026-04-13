@@ -5,9 +5,9 @@
 
 pub mod dispatch;
 
-use std::path::Path;
-use serde_json::{json, Value};
 use crate::toolkit::client::TabClientError;
+use serde_json::{json, Value};
+use std::path::Path;
 
 /// 添加文字水印（简单像素绘制，不依赖外部字体）
 pub fn add_watermark(
@@ -20,8 +20,8 @@ pub fn add_watermark(
 ) -> Result<Value, TabClientError> {
     use image::{GenericImageView, Rgba};
 
-    let img = image::open(input)
-        .map_err(|e| TabClientError::Other(format!("无法打开图片: {e}")))?;
+    let img =
+        image::open(input).map_err(|e| TabClientError::Other(format!("无法打开图片: {e}")))?;
 
     let (width, height) = img.dimensions();
     let mut overlay = img.to_rgba8();
@@ -59,7 +59,8 @@ pub fn add_watermark(
         y += step_y;
     }
 
-    overlay.save(output)
+    overlay
+        .save(output)
         .map_err(|e| TabClientError::Other(format!("保存失败: {e}")))?;
 
     Ok(json!({

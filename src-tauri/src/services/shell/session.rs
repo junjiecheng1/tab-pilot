@@ -8,6 +8,38 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use super::collector::OutputCollector;
+use crate::infra::tools::ToolsManager;
+
+const MAX_COMMAND_HISTORY: usize = 20;
+
+#[derive(Clone, Debug)]
+pub struct ShellCommandState {
+    pub id: String,
+    pub command: String,
+    pub marker: String,
+    pub status: String,
+    pub exit_code: Option<i32>,
+    pub command_done: bool,
+    pub timed_out: bool,
+    pub output: String,
+}
+
+impl ShellCommandState {
+    pub fn new(command: &str) -> Self {
+        let id = uuid::Uuid::new_v4().to_string();
+        let marker = format!("__TABPILOT_DONE__{}__", id.replace('-', ""));
+        Self {
+            id,
+            command: command.to_string(),
+            marker,
+            status: "running".to_string(),
+            exit_code: None,
+            command_done: false,
+            timed_out: false,
+            output: String::new(),
+        }
+    }
+}
 
 /// Shell 会话
 pub struct ShellSession {
@@ -17,6 +49,8 @@ pub struct ShellSession {
     pub created_at: Instant,
     pub last_used: Instant,
     pub active: bool,
+    pub current_command: Option<ShellCommandState>,
+    pub command_history: Vec<ShellCommandState>,
     /// PTY master (写入端)
     writer: Box<dyn Write + Send>,
     /// 子进程
@@ -47,7 +81,6 @@ impl ShellSession {
         cmd.arg("-i");
         cmd.cwd(cwd);
 
-        // 注入环境变量
         if let Some(env) = environment {
             for (k, v) in env {
                 cmd.env(k, v);
@@ -56,35 +89,35 @@ impl ShellSession {
         cmd.env("SESSION_ID", session_id);
         cmd.env("TERM", "xterm-256color");
 
-        // 注入 CLI 工具 PATH (rg, fd, jq, yq, markitdown 等)
-        let tools_dir = dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("/tmp"))
-            .join(".tabpilot")
-            .join("runtime")
-            .join("tools");
+        let tools_mgr = ToolsManager::default();
+        let tools_dir = tools_mgr.tools_dir().to_path_buf();
         if tools_dir.exists() {
             let system_path = std::env::var("PATH").unwrap_or_default();
             let sep = if cfg!(windows) { ";" } else { ":" };
-            // 基础 tools/ + Archive 子目录 (如 tools/markitdown/)
-            let mut path_parts = vec![tools_dir.display().to_string()];
-            let markitdown_dir = tools_dir.join("markitdown");
-            if markitdown_dir.exists() {
-                path_parts.push(markitdown_dir.display().to_string());
-            }
+            let mut path_parts = tools_mgr
+                .path_dirs()
+                .into_iter()
+                .map(|dir| dir.display().to_string())
+                .collect::<Vec<_>>();
             path_parts.push(system_path);
             cmd.env("PATH", path_parts.join(sep));
         }
 
-        let child = pair.slave.spawn_command(cmd)
+        let child = pair
+            .slave
+            .spawn_command(cmd)
             .map_err(|e| format!("进程启动失败: {e}"))?;
 
-        let writer = pair.master.take_writer()
+        let writer = pair
+            .master
+            .take_writer()
             .map_err(|e| format!("PTY writer 获取失败: {e}"))?;
 
-        let reader = pair.master.try_clone_reader()
+        let reader = pair
+            .master
+            .try_clone_reader()
             .map_err(|e| format!("PTY reader 获取失败: {e}"))?;
 
-        // 启动输出收集
         let collector = OutputCollector::new();
         collector.spawn_reader(reader, session_id.to_string());
 
@@ -97,10 +130,27 @@ impl ShellSession {
             created_at: Instant::now(),
             last_used: Instant::now(),
             active: true,
+            current_command: None,
+            command_history: Vec::new(),
             writer,
             child,
             collector,
         })
+    }
+
+    pub fn begin_command(&mut self, command: &str) -> Result<ShellCommandState, String> {
+        self.refresh_active();
+        if !self.active {
+            return Err("shell session 已结束".to_string());
+        }
+        if self.has_running_command() {
+            return Err("当前 session 已有运行中的 command".to_string());
+        }
+        self.collector.clear();
+        let state = ShellCommandState::new(command);
+        self.current_command = Some(state.clone());
+        self.last_used = Instant::now();
+        Ok(state)
     }
 
     /// 写入命令到 PTY
@@ -128,14 +178,123 @@ impl ShellSession {
         Ok(text.len())
     }
 
-    /// 获取 exit_code (非阻塞)
-    pub fn try_exit_code(&mut self) -> Option<i32> {
-        match self.child.try_wait() {
-            Ok(Some(status)) => {
-                self.active = false;
-                Some(status.exit_code() as i32)
+    pub fn has_running_command(&self) -> bool {
+        self.current_command
+            .as_ref()
+            .map(|command| !command.command_done)
+            .unwrap_or(false)
+    }
+
+    pub fn current_command_id(&self) -> Option<&str> {
+        self.current_command
+            .as_ref()
+            .map(|command| command.id.as_str())
+    }
+
+    pub fn set_current_output(&mut self, output: String) -> Result<(), String> {
+        let current = self
+            .current_command
+            .as_mut()
+            .ok_or_else(|| "当前 session 没有运行中的 command".to_string())?;
+        current.output = output;
+        self.last_used = Instant::now();
+        Ok(())
+    }
+
+    pub fn mark_current_timed_out(&mut self, output: String) -> Result<ShellCommandState, String> {
+        let current = self
+            .current_command
+            .as_mut()
+            .ok_or_else(|| "当前 session 没有运行中的 command".to_string())?;
+        current.output = output;
+        current.status = "timed_out".to_string();
+        current.exit_code = None;
+        current.command_done = false;
+        current.timed_out = true;
+        self.last_used = Instant::now();
+        Ok(current.clone())
+    }
+
+    pub fn complete_current_command(
+        &mut self,
+        output: String,
+        exit_code: i32,
+    ) -> Result<ShellCommandState, String> {
+        let mut current = self
+            .current_command
+            .take()
+            .ok_or_else(|| "当前 session 没有运行中的 command".to_string())?;
+        current.output = output;
+        current.exit_code = Some(exit_code);
+        current.command_done = true;
+        current.timed_out = false;
+        current.status = if exit_code == 0 {
+            "completed".to_string()
+        } else {
+            "failed".to_string()
+        };
+        self.last_used = Instant::now();
+        let snapshot = current.clone();
+        self.push_history(current);
+        Ok(snapshot)
+    }
+
+    pub fn interrupt_current_command(&mut self, output: String) -> Option<ShellCommandState> {
+        let mut current = self.current_command.take()?;
+        current.output = output;
+        current.exit_code = None;
+        current.command_done = true;
+        current.timed_out = false;
+        current.status = "interrupted".to_string();
+        self.last_used = Instant::now();
+        let snapshot = current.clone();
+        self.push_history(current);
+        Some(snapshot)
+    }
+
+    pub fn snapshot_command(
+        &mut self,
+        requested_id: Option<&str>,
+    ) -> Result<(ShellCommandState, bool), String> {
+        self.refresh_active();
+
+        if let Some(current) = self.current_command.as_mut() {
+            let matches = requested_id.map(|id| id == current.id).unwrap_or(true);
+            if matches {
+                return Ok((current.clone(), requested_id.is_none()));
             }
-            _ => None,
+        }
+
+        if let Some(command_id) = requested_id {
+            if let Some(command) = self
+                .command_history
+                .iter()
+                .rev()
+                .find(|item| item.id == command_id)
+            {
+                return Ok((command.clone(), false));
+            }
+            return Err(format!("command 不存在: {command_id}"));
+        }
+
+        if let Some(command) = self.command_history.last() {
+            return Ok((command.clone(), true));
+        }
+
+        Err("session 中没有 command".to_string())
+    }
+
+    pub fn refresh_active(&mut self) -> bool {
+        match self.child.try_wait() {
+            Ok(Some(_)) => {
+                self.active = false;
+                false
+            }
+            Ok(None) => {
+                self.active = true;
+                true
+            }
+            Err(_) => self.active,
         }
     }
 
@@ -143,5 +302,13 @@ impl ShellSession {
     pub fn kill(&mut self) {
         let _ = self.child.kill();
         self.active = false;
+    }
+
+    fn push_history(&mut self, command: ShellCommandState) {
+        self.command_history.push(command);
+        if self.command_history.len() > MAX_COMMAND_HISTORY {
+            let overflow = self.command_history.len() - MAX_COMMAND_HISTORY;
+            self.command_history.drain(0..overflow);
+        }
     }
 }

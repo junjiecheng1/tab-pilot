@@ -30,11 +30,11 @@ pub async fn try_dispatch(
 
     match program {
         // ── 本地工具 (纯 Rust, 不需要网络) ──────────
-        "tab-xlsx"    => Some(crate::toolkit::xlsx::dispatch::dispatch(sub_args).await),
-        "tab-pdf"     => Some(crate::toolkit::pdf::dispatch::dispatch(sub_args).await),
-        "tab-chart"   => Some(crate::toolkit::chart::dispatch::dispatch(sub_args)),
+        "tab-xlsx" => Some(crate::toolkit::xlsx::dispatch::dispatch(sub_args).await),
+        "tab-pdf" => Some(crate::toolkit::pdf::dispatch::dispatch(sub_args).await),
+        "tab-chart" => Some(crate::toolkit::chart::dispatch::dispatch(sub_args)),
         "tab-diagram" => Some(crate::toolkit::diagram::dispatch::dispatch(sub_args)),
-        "tab-image"   => Some(crate::toolkit::image::dispatch::dispatch(sub_args)),
+        "tab-image" => Some(crate::toolkit::image::dispatch::dispatch(sub_args)),
 
         // ── 飞书 API 工具 (需要 Token + 网络) ───────
         "tab-base" | "tab-doc" | "tab-im" | "tab-drive" | "tab-skillhub" => {
@@ -43,11 +43,13 @@ pub async fn try_dispatch(
                 Err(e) => return Some(Err(e)),
             };
             let result = match program {
-                "tab-base"     => crate::toolkit::base::dispatch::dispatch(sub_args, &client).await,
-                "tab-doc"      => crate::toolkit::doc::dispatch::dispatch(sub_args, &client).await,
-                "tab-im"       => crate::toolkit::im::dispatch::dispatch(sub_args, &client).await,
-                "tab-drive"    => crate::toolkit::drive::dispatch::dispatch(sub_args, &client).await,
-                "tab-skillhub" => crate::toolkit::skillhub::dispatch::dispatch(sub_args, &client).await,
+                "tab-base" => crate::toolkit::base::dispatch::dispatch(sub_args, &client).await,
+                "tab-doc" => crate::toolkit::doc::dispatch::dispatch(sub_args, &client).await,
+                "tab-im" => crate::toolkit::im::dispatch::dispatch(sub_args, &client).await,
+                "tab-drive" => crate::toolkit::drive::dispatch::dispatch(sub_args, &client).await,
+                "tab-skillhub" => {
+                    crate::toolkit::skillhub::dispatch::dispatch(sub_args, &client).await
+                }
                 _ => unreachable!(),
             };
             Some(result)
@@ -61,10 +63,11 @@ pub async fn try_dispatch(
 async fn get_client(
     token_provider: Option<&TokenProvider>,
 ) -> Result<crate::toolkit::client::TabClient, ServiceError> {
-    let provider = token_provider.ok_or_else(|| {
-        ServiceError::internal("飞书功能不可用: 未登录或 TokenProvider 未初始化")
-    })?;
-    provider.create_client().await
+    let provider = token_provider
+        .ok_or_else(|| ServiceError::internal("飞书功能不可用: 未登录或 TokenProvider 未初始化"))?;
+    provider
+        .create_client()
+        .await
         .map_err(|e| ServiceError::internal(format!("获取飞书 Token 失败: {e}")))
 }
 

@@ -11,13 +11,9 @@ pub async fn download_binary(url: &str, dest: &Path) -> Result<(), String> {
         return Err(format!("HTTP {}", resp.status()));
     }
 
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| format!("读取失败: {e}"))?;
+    let bytes = resp.bytes().await.map_err(|e| format!("读取失败: {e}"))?;
 
-    std::fs::write(dest, &bytes)
-        .map_err(|e| format!("写入失败: {e}"))?;
+    std::fs::write(dest, &bytes).map_err(|e| format!("写入失败: {e}"))?;
 
     // chmod +x (Unix)
     #[cfg(unix)]
@@ -40,19 +36,20 @@ pub async fn download_and_extract(url: &str, dest_dir: &Path) -> Result<(), Stri
         return Err(format!("HTTP {}", resp.status()));
     }
 
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| format!("读取失败: {e}"))?;
+    let bytes = resp.bytes().await.map_err(|e| format!("读取失败: {e}"))?;
 
     // 写临时文件
     let tmp_path = dest_dir.join(".download.tar.gz");
-    std::fs::write(&tmp_path, &bytes)
-        .map_err(|e| format!("写入临时文件失败: {e}"))?;
+    std::fs::write(&tmp_path, &bytes).map_err(|e| format!("写入临时文件失败: {e}"))?;
 
     // 解压: tar -xzf xxx.tar.gz -C dest_dir
     let status = Command::new("tar")
-        .args(["-xzf", tmp_path.to_str().unwrap_or(""), "-C", dest_dir.to_str().unwrap_or("")])
+        .args([
+            "-xzf",
+            tmp_path.to_str().unwrap_or(""),
+            "-C",
+            dest_dir.to_str().unwrap_or(""),
+        ])
         .status()
         .await
         .map_err(|e| format!("tar 解压失败: {e}"))?;
@@ -77,11 +74,14 @@ pub async fn download_and_extract(url: &str, dest_dir: &Path) -> Result<(), Stri
                     let dir_name = path.file_name().unwrap_or_default().to_string_lossy();
                     let bin_path = path.join(dir_name.as_ref());
                     if bin_path.exists() {
-                        let _ = std::fs::set_permissions(&bin_path, std::fs::Permissions::from_mode(0o755));
+                        let _ = std::fs::set_permissions(
+                            &bin_path,
+                            std::fs::Permissions::from_mode(0o755),
+                        );
                     }
                 } else if !path.to_string_lossy().ends_with(".gz") {
-                     // For TarGzDirect root binaries like lark-cli
-                     let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755));
+                    // For TarGzDirect root binaries like lark-cli
+                    let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755));
                 }
             }
         }

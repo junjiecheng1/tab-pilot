@@ -19,6 +19,7 @@ export interface StatusResponse {
   user_id: string;
   user_display: string;
   tools_ready: boolean;
+  tool_names: string[];
 }
 
 export interface LogEntry {
@@ -64,6 +65,7 @@ export async function getStatus(): Promise<StatusResponse> {
     user_id: '',
     user_display: '',
     tools_ready: false,
+    tool_names: [],
   };
 }
 
@@ -156,9 +158,15 @@ export async function killShellSession(sessionId: string): Promise<void> {
 /** 手动执行 shell 命令 (测试用) */
 export interface ShellExecResult {
   session_id: string;
-  output: string;
+  command_id: string;
+  status: string;
+  command_done: boolean;
+  timed_out: boolean;
+  session_alive: boolean;
   exit_code: number | null;
+  output: string;
   active: boolean;
+  latest?: boolean;
 }
 
 export async function execShellCommand(command: string, timeout = 30): Promise<ShellExecResult | null> {

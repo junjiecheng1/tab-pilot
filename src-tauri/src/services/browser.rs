@@ -10,8 +10,8 @@ use std::time::{Duration, Instant};
 use serde_json::{json, Value};
 use tokio::sync::Mutex;
 
-use crate::engine::{self, BrowserState};
 use crate::core::error::{ServiceError, ServiceResult};
+use crate::engine::{self, BrowserState};
 
 /// 浏览器服务 — 持有独立的 BrowserState
 pub struct BrowserService {
@@ -66,7 +66,9 @@ impl BrowserService {
     /// 获取浏览器信息
     pub async fn get_info(&self) -> ServiceResult {
         let state = self.state.lock().await;
-        let mgr = state.browser.as_ref()
+        let mgr = state
+            .browser
+            .as_ref()
             .ok_or_else(|| ServiceError::unavailable("浏览器未启动"))?;
         let tabs = mgr.tab_list();
         let url = mgr.get_url().await.unwrap_or_default();

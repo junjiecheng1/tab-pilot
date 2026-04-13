@@ -1,7 +1,7 @@
 // MCP 配置结构体
 
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// MCP 服务器传输配置
 #[derive(Debug, Clone, Deserialize)]

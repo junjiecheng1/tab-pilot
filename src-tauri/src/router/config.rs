@@ -2,7 +2,7 @@
 //
 // .env 只配 host:port，协议自动推导:
 //   localhost:8080  → ws://  + http://
-//   www.syxc.art    → wss:// + https://
+//   www.xtabapp.com    → wss:// + https://
 
 use std::env;
 use std::path::PathBuf;
@@ -60,7 +60,10 @@ impl PilotConfig {
 
         let _ = std::fs::create_dir_all(&data_dir);
 
-        let host = env_or_compile("PILOT_SERVER", env!("PILOT_SERVER", "localhost:8080"));
+        let host = env_or_compile(
+            "PILOT_SERVER",
+            option_env!("PILOT_SERVER").unwrap_or("localhost:8080"),
+        );
         let (ws_url, http_url) = Self::derive_urls(&host);
 
         Self {
@@ -85,8 +88,7 @@ impl PilotConfig {
 
     /// 是否是本地开发
     pub fn is_local(&self) -> bool {
-        self.server_host.starts_with("localhost")
-            || self.server_host.starts_with("127.0.0.1")
+        self.server_host.starts_with("localhost") || self.server_host.starts_with("127.0.0.1")
     }
 
     /// 拼接 API URL: /api/pilot/status → http://host/api/pilot/status
@@ -96,7 +98,11 @@ impl PilotConfig {
 
     /// 版本字符串
     pub fn version(&self) -> String {
-        let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x86_64" };
+        let arch = if cfg!(target_arch = "aarch64") {
+            "arm64"
+        } else {
+            "x86_64"
+        };
         let os = platform_os_display();
         format!("1.0.0 ({os}_{arch})")
     }
@@ -106,7 +112,11 @@ impl PilotConfig {
     /// 从 host 推导 ws:// / wss:// 和 http:// / https://
     fn derive_urls(host: &str) -> (String, String) {
         let is_local = host.starts_with("localhost") || host.starts_with("127.0.0.1");
-        let (ws, http) = if is_local { ("ws", "http") } else { ("wss", "https") };
+        let (ws, http) = if is_local {
+            ("ws", "http")
+        } else {
+            ("wss", "https")
+        };
         (
             format!("{ws}://{host}/ws/pilot"),
             format!("{http}://{host}"),
@@ -128,7 +138,9 @@ fn env_or_default(key: &str, default: &str) -> String {
 
 /// 布尔环境变量
 fn env_bool(key: &str) -> bool {
-    env::var(key).map(|v| v == "true" || v == "1").unwrap_or(false)
+    env::var(key)
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false)
 }
 
 /// 默认工作目录
@@ -142,16 +154,24 @@ fn default_workspace() -> String {
 
 /// 平台标识 (内部用)
 fn platform_os() -> &'static str {
-    if cfg!(target_os = "macos") { "darwin" }
-    else if cfg!(target_os = "windows") { "windows" }
-    else { "linux" }
+    if cfg!(target_os = "macos") {
+        "darwin"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else {
+        "linux"
+    }
 }
 
 /// 平台显示名
 fn platform_os_display() -> &'static str {
-    if cfg!(target_os = "macos") { "Darwin" }
-    else if cfg!(target_os = "windows") { "Windows" }
-    else { "Linux" }
+    if cfg!(target_os = "macos") {
+        "Darwin"
+    } else if cfg!(target_os = "windows") {
+        "Windows"
+    } else {
+        "Linux"
+    }
 }
 
 /// 平台 Shell 命令前缀

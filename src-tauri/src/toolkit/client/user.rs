@@ -12,27 +12,18 @@ pub async fn batch_get_users(
     user_ids: &[String],
     user_id_type: &str,
 ) -> Result<Value> {
-    let mut params: Vec<(&str, String)> = vec![
-        ("user_id_type", user_id_type.to_string()),
-    ];
+    let mut params: Vec<(&str, String)> = vec![("user_id_type", user_id_type.to_string())];
     for id in user_ids {
         params.push(("user_ids", id.clone()));
     }
 
-    let str_params: Vec<(&str, &str)> = params
-        .iter()
-        .map(|(k, v)| (*k, v.as_str()))
-        .collect();
+    let str_params: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
     client.get("/contact/v3/users/batch", &str_params).await
 }
 
 /// 搜索员工（自动分页）
-pub async fn search_users(
-    client: &TabClient,
-    query: &str,
-    page_size: i32,
-) -> Result<Vec<Value>> {
+pub async fn search_users(client: &TabClient, query: &str, page_size: i32) -> Result<Vec<Value>> {
     let mut all_users = Vec::new();
     let mut page_token: Option<String> = None;
 
@@ -45,10 +36,7 @@ pub async fn search_users(
             params.push(("page_token", pt.clone()));
         }
 
-        let str_params: Vec<(&str, &str)> = params
-            .iter()
-            .map(|(k, v)| (*k, v.as_str()))
-            .collect();
+        let str_params: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
         let resp: Value = client
             .get("/contact/v3/users/find_by_department", &str_params)
@@ -58,7 +46,10 @@ pub async fn search_users(
             all_users.extend(items.clone());
         }
 
-        let has_more = resp.get("has_more").and_then(|v| v.as_bool()).unwrap_or(false);
+        let has_more = resp
+            .get("has_more")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         if !has_more {
             break;
         }
@@ -92,10 +83,7 @@ pub async fn get_subordinates(
             params.push(("page_token", pt.clone()));
         }
 
-        let str_params: Vec<(&str, &str)> = params
-            .iter()
-            .map(|(k, v)| (*k, v.as_str()))
-            .collect();
+        let str_params: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
         let resp: Value = client
             .get("/contact/v3/users/find_by_department", &str_params)
@@ -105,7 +93,10 @@ pub async fn get_subordinates(
             all_subordinates.extend(items.clone());
         }
 
-        let has_more = resp.get("has_more").and_then(|v| v.as_bool()).unwrap_or(false);
+        let has_more = resp
+            .get("has_more")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         if !has_more {
             break;
         }

@@ -116,7 +116,10 @@ impl DataValidator {
         }
 
         let expected: HashSet<&str> = ["fields", "rows", "values"].into_iter().collect();
-        let unexpected: Vec<&String> = obj.keys().filter(|k| !expected.contains(k.as_str())).collect();
+        let unexpected: Vec<&String> = obj
+            .keys()
+            .filter(|k| !expected.contains(k.as_str()))
+            .collect();
         if !unexpected.is_empty() {
             issues.push(format!("Unexpected keys: {unexpected:?}"));
         }
@@ -218,7 +221,9 @@ pub fn parse_bitable_url(url: &str) -> HashMap<String, String> {
     if let Ok(parsed) = Url::parse(url.trim()) {
         for (k, v) in parsed.query_pairs() {
             if k == "table" {
-                result.entry("table_id".into()).or_insert_with(|| v.to_string());
+                result
+                    .entry("table_id".into())
+                    .or_insert_with(|| v.to_string());
             }
         }
     }
@@ -235,10 +240,7 @@ pub fn csv_to_json(content: &str) -> Value {
         Err(_) => return json!({"fields": [], "rows": []}),
     };
 
-    let fields: Vec<Value> = headers
-        .iter()
-        .map(|h| json!({"field_name": h}))
-        .collect();
+    let fields: Vec<Value> = headers.iter().map(|h| json!({"field_name": h})).collect();
 
     let mut rows: Vec<Value> = Vec::new();
     for result in reader.records() {

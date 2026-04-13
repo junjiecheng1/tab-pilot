@@ -103,14 +103,8 @@ pub async fn create_table(
 
     // 创建表
     let tname = table_name.unwrap_or("Table");
-    let table_result = client::bitable::add_table(
-        client,
-        &app_token_str,
-        tname,
-        None,
-        Some(&api_fields),
-    )
-    .await?;
+    let table_result =
+        client::bitable::add_table(client, &app_token_str, tname, None, Some(&api_fields)).await?;
 
     let table_id = table_result
         .get("table_id")

@@ -3,8 +3,8 @@
 // 单一内存源 + 文件持久化，不再有多处同步问题
 // device_id: 首次启动生成 UUID，持久化到 data_dir/device_id
 
-use std::path::PathBuf;
 use log;
+use std::path::PathBuf;
 
 /// 认证管理
 pub struct AuthManager {
@@ -121,19 +121,13 @@ impl AuthManager {
         {
             Ok(resp) if resp.status().is_success() => {
                 if let Ok(body) = resp.json::<serde_json::Value>().await {
-                    self.user_id = body["user_id"]
-                        .as_str()
-                        .unwrap_or("")
-                        .to_string();
+                    self.user_id = body["user_id"].as_str().unwrap_or("").to_string();
                     self.user_display = body["display_name"]
                         .as_str()
                         .or_else(|| body["phone"].as_str())
                         .unwrap_or("")
                         .to_string();
-                    log::info!(
-                        "[Auth] 用户信息: {} ({})",
-                        self.user_display, self.user_id
-                    );
+                    log::info!("[Auth] 用户信息: {} ({})", self.user_display, self.user_id);
                 }
             }
             Ok(resp) => {
@@ -151,12 +145,11 @@ impl AuthManager {
     /// macOS: ioreg 获取 IOPlatformUUID
     /// 其他: hostname 作为种子
     fn generate_device_id() -> String {
-        let seed = Self::get_hardware_uuid()
-            .unwrap_or_else(|| {
-                hostname::get()
-                    .map(|h| h.to_string_lossy().to_string())
-                    .unwrap_or_else(|_| uuid::Uuid::new_v4().to_string())
-            });
+        let seed = Self::get_hardware_uuid().unwrap_or_else(|| {
+            hostname::get()
+                .map(|h| h.to_string_lossy().to_string())
+                .unwrap_or_else(|_| uuid::Uuid::new_v4().to_string())
+        });
 
         // SHA256(seed + salt) → 取前 8 位 hex
         use std::collections::hash_map::DefaultHasher;

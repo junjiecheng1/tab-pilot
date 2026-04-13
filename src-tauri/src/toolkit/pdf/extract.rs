@@ -2,9 +2,9 @@
 //
 // 使用 pdf-extract (基于 lopdf, 支持 Type3/CID 等复杂字体)
 
-use std::path::Path;
-use serde_json::{json, Value};
 use crate::toolkit::client::TabClientError;
+use serde_json::{json, Value};
+use std::path::Path;
 
 /// 提取 PDF 文本
 pub fn extract_text(path: &Path) -> Result<Value, TabClientError> {
@@ -15,10 +15,12 @@ pub fn extract_text(path: &Path) -> Result<Value, TabClientError> {
     let pages_text: Vec<Value> = pages
         .iter()
         .enumerate()
-        .map(|(i, text)| json!({
-            "page": i + 1,
-            "text": text.trim(),
-        }))
+        .map(|(i, text)| {
+            json!({
+                "page": i + 1,
+                "text": text.trim(),
+            })
+        })
         .collect();
 
     let full_text: String = pages
@@ -40,8 +42,7 @@ pub fn extract_images(path: &Path, output_dir: &Path) -> Result<Value, TabClient
     let doc = lopdf::Document::load(path)
         .map_err(|e| TabClientError::Other(format!("无法打开 PDF: {e}")))?;
 
-    std::fs::create_dir_all(output_dir)
-        .map_err(|e| TabClientError::Other(e.to_string()))?;
+    std::fs::create_dir_all(output_dir).map_err(|e| TabClientError::Other(e.to_string()))?;
 
     let mut images: Vec<Value> = Vec::new();
     let mut img_idx = 0;

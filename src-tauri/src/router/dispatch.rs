@@ -17,11 +17,11 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use super::protocol::JsonRpcResponse;
 use crate::services::AppServices;
-use super::protocol::JsonRpcResponse; 
 
 pub struct MessageRouter {
-    app: Arc<AppServices>,   
+    app: Arc<AppServices>,
 }
 
 impl MessageRouter {
@@ -42,30 +42,41 @@ impl MessageRouter {
             method.to_string()
         } else {
             log::warn!("[WS] ← 未知方法: {} (id={})", method, request_id);
-            return JsonRpcResponse::error(
-                request_id,
-                -32601,
-                &format!("未知方法: {method}"),
-            );
+            return JsonRpcResponse::error(request_id, -32601, &format!("未知方法: {method}"));
         };
 
         // 请求日志: method + 参数摘要
         let params_preview = Self::preview_params(params);
-        log::info!("[WS] → {} {} (id={})", app_method, params_preview, request_id);
+        log::info!(
+            "[WS] → {} {} (id={})",
+            app_method,
+            params_preview,
+            request_id
+        );
         let t0 = Instant::now();
 
         match self.app.handle_request(&app_method, params.clone()).await {
             Ok(value) => {
                 let duration = t0.elapsed();
                 let result_preview = Self::preview_result(&value);
-                log::info!("[WS] ← {} OK ({}ms) {} (id={})",
-                    app_method, duration.as_millis(), result_preview, request_id);
+                log::info!(
+                    "[WS] ← {} OK ({}ms) {} (id={})",
+                    app_method,
+                    duration.as_millis(),
+                    result_preview,
+                    request_id
+                );
                 JsonRpcResponse::success(request_id, value)
             }
             Err(err) => {
                 let duration = t0.elapsed();
-                log::warn!("[WS] ← {} ERR ({}ms) {} (id={})",
-                    app_method, duration.as_millis(), err.message, request_id);
+                log::warn!(
+                    "[WS] ← {} ERR ({}ms) {} (id={})",
+                    app_method,
+                    duration.as_millis(),
+                    err.message,
+                    request_id
+                );
                 // 映射 ServiceError 到 JSON-RPC 错误码
                 let code = match err.code {
                     crate::core::error::ErrorCode::BadRequest => -32602,
@@ -84,7 +95,7 @@ impl MessageRouter {
         if params.is_null() {
             return String::new();
         }
-        
+
         let mut safe_params = params.clone();
         if let Some(obj) = safe_params.as_object_mut() {
             if obj.contains_key("env") {

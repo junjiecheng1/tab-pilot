@@ -22,7 +22,10 @@ pub async fn sync_table(
     let mut field_type_map: HashMap<String, i64> = HashMap::new();
 
     for field_def in &fields_data.items {
-        let name = field_def.get("field_name").and_then(|v| v.as_str()).unwrap_or("");
+        let name = field_def
+            .get("field_name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let ftype = field_def.get("type").and_then(|v| v.as_i64()).unwrap_or(0);
         field_type_map.insert(name.to_string(), ftype);
     }

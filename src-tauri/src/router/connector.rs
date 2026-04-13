@@ -5,25 +5,23 @@
 //   · 分发消息到 MessageRouter
 //   · 退避重连策略
 
+use futures_util::{stream::SplitSink, StreamExt};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use futures_util::{StreamExt, stream::SplitSink};
-use tokio::sync::{Notify, RwLock, mpsc};
+use tokio::sync::{mpsc, Notify, RwLock};
 
 use crate::services::AppServices;
-use tokio_tungstenite::{MaybeTlsStream, tungstenite::Message};
+use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream};
 
 /// 具体的 WebSocket Sink 类型 (connect_async 返回)
-type WsSink = SplitSink<
-    tokio_tungstenite::WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>,
-    Message,
->;
+type WsSink =
+    SplitSink<tokio_tungstenite::WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>, Message>;
 
-use crate::ui::auth::AuthManager;
 use super::config::PilotConfig;
-use super::protocol::{BridgeSender, IncomingMessage, JsonRpcResponse};
 use super::dispatch::MessageRouter;
+use super::protocol::{BridgeSender, IncomingMessage, JsonRpcResponse};
 use crate::infra::store::LocalStore;
+use crate::ui::auth::AuthManager;
 
 // ── 连接状态 ──────────────────────────────
 
@@ -118,7 +116,11 @@ impl Connector {
             *self.state.write().await = ConnState::Connecting;
             let device_id = auth.read().await.device_id.clone();
             let url = format!("{}?token={}&device_id={}", config.ws_url, token, device_id);
-            log::info!("[Connector] 连接 {} (device={})...", config.ws_url, device_id);
+            log::info!(
+                "[Connector] 连接 {} (device={})...",
+                config.ws_url,
+                device_id
+            );
 
             match tokio_tungstenite::connect_async(&url).await {
                 Ok((ws_stream, _)) => {
@@ -131,7 +133,8 @@ impl Connector {
                     auth.write().await.fetch_user_info(&config.http_url).await;
 
                     // 运行会话 (阻塞直到断开)
-                    self.run_session(ws_stream, &config, &auth, &router, &store, &app).await;
+                    self.run_session(ws_stream, &config, &auth, &router, &store, &app)
+                        .await;
                 }
                 Err(e) => {
                     log::warn!("[Connector] ❌ 连接失败: {e}");
@@ -274,7 +277,8 @@ impl Connector {
             let a = auth.read().await;
             (a.device_id.clone(), a.device_name.clone())
         };
-        let workspace = store.get_str("settings", "workspace")
+        let workspace = store
+            .get_str("settings", "workspace")
             .unwrap_or_else(|| config.workspace.clone());
 
         // 通过 AppServices 获取状态
@@ -282,15 +286,19 @@ impl Connector {
         let shell_sessions = app.get_shell_sessions().await;
         let skills = app.get_skill_names().await;
 
-        sender.hello(
-            &device_id, &device_name,
-            &config.os_name, &workspace,
-            &config.version(),
-            &["shell", "file", "browser", "mcp"],
-            browser_state,
-            shell_sessions,
-            skills,
-        ).await;
+        sender
+            .hello(
+                &device_id,
+                &device_name,
+                &config.os_name,
+                &workspace,
+                &config.version(),
+                &["shell", "file", "browser", "mcp"],
+                browser_state,
+                shell_sessions,
+                skills,
+            )
+            .await;
     }
 
     /// 启动心跳 task
@@ -365,15 +373,14 @@ impl Connector {
         tokio::spawn(async move {
             let resp = match tokio::task::spawn(async move {
                 router_clone.handle_request(&id, &method, &params).await
-            }).await {
+            })
+            .await
+            {
                 Ok(r) => r,
                 Err(e) => {
                     log::error!("[Connector] handler panic: {e}");
                     let fallback_id = incoming.id.as_deref().unwrap_or("");
-                    JsonRpcResponse::error(
-                        fallback_id,
-                        -32603, &format!("internal error: {e}"),
-                    )
+                    JsonRpcResponse::error(fallback_id, -32603, &format!("internal error: {e}"))
                 }
             };
             let _ = tx.send(resp).await;

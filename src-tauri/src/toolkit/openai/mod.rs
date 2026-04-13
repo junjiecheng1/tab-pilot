@@ -95,7 +95,9 @@ pub struct EndpointMapping {
 
 impl EndpointMapping {
     pub fn new() -> Self {
-        Self { map: HashMap::new() }
+        Self {
+            map: HashMap::new(),
+        }
     }
 
     pub fn with(mut self, endpoint: &str, tool: &str) -> Self {
@@ -144,9 +146,9 @@ pub async fn chat_completion(
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        return Err(crate::toolkit::client::TabClientError::Other(
-            format!("API error {status}: {body}")
-        ));
+        return Err(crate::toolkit::client::TabClientError::Other(format!(
+            "API error {status}: {body}"
+        )));
     }
 
     let response: ChatResponse = resp
@@ -181,9 +183,9 @@ pub async fn chat_completion_stream(
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        return Err(crate::toolkit::client::TabClientError::Other(
-            format!("API error {status}: {body}")
-        ));
+        return Err(crate::toolkit::client::TabClientError::Other(format!(
+            "API error {status}: {body}"
+        )));
     }
 
     Ok(resp)

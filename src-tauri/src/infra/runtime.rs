@@ -71,10 +71,7 @@ pub struct RuntimeManager {
 impl RuntimeManager {
     pub fn new(data_dir: &Path) -> Self {
         // runtime 目录和 data 目录同级
-        let runtime_dir = data_dir
-            .parent()
-            .unwrap_or(data_dir)
-            .join("runtime");
+        let runtime_dir = data_dir.parent().unwrap_or(data_dir).join("runtime");
 
         Self {
             runtime_dir,
@@ -127,7 +124,8 @@ impl RuntimeManager {
 
     /// 按需安装 — 幂等, 已安装跳过
     pub async fn ensure_ready<F: Fn(SetupProgress)>(
-        &self, on_progress: F,
+        &self,
+        on_progress: F,
     ) -> Result<(), RuntimeError> {
         if self.is_ready() {
             // 即使已安装, 也更新脚本 (开发时改 JS 无需重装)
@@ -178,27 +176,29 @@ impl RuntimeManager {
         log::info!("[Runtime] 下载 Node.js: {}", url);
 
         // 使用 reqwest 下载
-        let resp = reqwest::get(&url).await
+        let resp = reqwest::get(&url)
+            .await
             .map_err(|e| RuntimeError::DownloadFailed(e.to_string()))?;
 
         if !resp.status().is_success() {
-            return Err(RuntimeError::DownloadFailed(
-                format!("HTTP {}", resp.status()),
-            ));
+            return Err(RuntimeError::DownloadFailed(format!(
+                "HTTP {}",
+                resp.status()
+            )));
         }
 
-        let bytes = resp.bytes().await
+        let bytes = resp
+            .bytes()
+            .await
             .map_err(|e| RuntimeError::DownloadFailed(e.to_string()))?;
 
-        std::fs::write(&archive_path, &bytes)
-            .map_err(|e| RuntimeError::IoError(e.to_string()))?;
+        std::fs::write(&archive_path, &bytes).map_err(|e| RuntimeError::IoError(e.to_string()))?;
 
         log::info!("[Runtime] 下载完成, 解压中...");
 
         // 解压
         let node_dir = self.runtime_dir.join("node");
-        std::fs::create_dir_all(&node_dir)
-            .map_err(|e| RuntimeError::IoError(e.to_string()))?;
+        std::fs::create_dir_all(&node_dir).map_err(|e| RuntimeError::IoError(e.to_string()))?;
 
         if cfg!(windows) {
             // Windows: zip 解压
@@ -216,9 +216,7 @@ impl RuntimeManager {
             .arg("--version")
             .output()
             .await
-            .map_err(|e| RuntimeError::ExtractFailed(
-                format!("node --version 失败: {e}"),
-            ))?;
+            .map_err(|e| RuntimeError::ExtractFailed(format!("node --version 失败: {e}")))?;
 
         let version = String::from_utf8_lossy(&output.stdout);
         log::info!("[Runtime] Node.js 已安装: {}", version.trim());
@@ -251,8 +249,7 @@ impl RuntimeManager {
         // 先解压到临时目录
         let temp_dir = self.runtime_dir.join("_node_extract_tmp");
         let _ = std::fs::remove_dir_all(&temp_dir);
-        std::fs::create_dir_all(&temp_dir)
-            .map_err(|e| RuntimeError::IoError(e.to_string()))?;
+        std::fs::create_dir_all(&temp_dir).map_err(|e| RuntimeError::IoError(e.to_string()))?;
 
         let status = Command::new("powershell")
             .args([
@@ -299,12 +296,21 @@ impl RuntimeManager {
             self.runtime_dir.join("node").join("bin").join("npm")
         };
 
-        let node_bin_dir = self.node_bin().parent().unwrap_or(Path::new("")).to_path_buf();
+        let node_bin_dir = self
+            .node_bin()
+            .parent()
+            .unwrap_or(Path::new(""))
+            .to_path_buf();
         let system_path = std::env::var("PATH").unwrap_or_default();
         let full_path = format!("{}:{}", node_bin_dir.display(), system_path);
 
         let status = Command::new(&npm)
-            .args(["install", "--prefix", &self.runtime_dir.to_string_lossy(), "playwright-core"])
+            .args([
+                "install",
+                "--prefix",
+                &self.runtime_dir.to_string_lossy(),
+                "playwright-core",
+            ])
             .env("PATH", &full_path)
             .status()
             .await
@@ -328,7 +334,11 @@ impl RuntimeManager {
         std::fs::create_dir_all(&browsers_path)
             .map_err(|e| RuntimeError::IoError(e.to_string()))?;
 
-        let node_bin_dir = self.node_bin().parent().unwrap_or(Path::new("")).to_path_buf();
+        let node_bin_dir = self
+            .node_bin()
+            .parent()
+            .unwrap_or(Path::new(""))
+            .to_path_buf();
         let system_path = std::env::var("PATH").unwrap_or_default();
         let full_path = format!("{}:{}", node_bin_dir.display(), system_path);
 
@@ -352,8 +362,7 @@ impl RuntimeManager {
     /// 复制 bridge 脚本到 scripts/
     fn copy_scripts(&self) -> Result<(), RuntimeError> {
         let scripts_dir = self.scripts_dir();
-        std::fs::create_dir_all(&scripts_dir)
-            .map_err(|e| RuntimeError::IoError(e.to_string()))?;
+        std::fs::create_dir_all(&scripts_dir).map_err(|e| RuntimeError::IoError(e.to_string()))?;
 
         // bridge 脚本内嵌到二进制中 (通过 include_str!)
         let bridge_js = include_str!("../../scripts/browser-bridge.js");
@@ -384,9 +393,7 @@ fn node_download_url() -> Result<(String, &'static str), RuntimeError> {
         ("linux", "x86_64") => ("linux", "x64"),
         ("linux", "aarch64") => ("linux", "arm64"),
         (os, arch) => {
-            return Err(RuntimeError::UnsupportedPlatform(
-                format!("{os}-{arch}"),
-            ));
+            return Err(RuntimeError::UnsupportedPlatform(format!("{os}-{arch}")));
         }
     };
 

@@ -27,3 +27,10 @@ dist-ssr
 
 # Tauri
 src-tauri/target/
+
+# 签名密钥
+*.key
+*.key.pub
+
+# 构建产物
+build/

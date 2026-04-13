@@ -3,11 +3,11 @@
 // 移植自: aily_chart/ (510行, 10种图表)
 // 所有图表生成 JSON/HTML spec，前端用 Plotly/ECharts 渲染
 
-pub mod types;
 pub mod dispatch;
+pub mod types;
 
-use serde_json::{json, Value};
 use crate::toolkit::client::TabClientError;
+use serde_json::{json, Value};
 
 /// 图表类型
 #[derive(Debug, Clone, Copy)]
@@ -64,7 +64,8 @@ pub fn create_chart(
     data: &Value,
     options: Option<&Value>,
 ) -> Result<Value, TabClientError> {
-    let data_obj = data.as_object()
+    let data_obj = data
+        .as_object()
         .ok_or_else(|| TabClientError::InvalidParam("data must be object".into()))?;
 
     let x = data_obj.get("x").cloned().unwrap_or(json!([]));

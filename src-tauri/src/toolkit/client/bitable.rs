@@ -214,15 +214,9 @@ pub async fn delete_field(
 // ── Table ──────────────────────────────
 
 /// 列出表格
-pub async fn list_tables(
-    client: &TabClient,
-    app_token: &str,
-) -> Result<PageData<Value>> {
+pub async fn list_tables(client: &TabClient, app_token: &str) -> Result<PageData<Value>> {
     client
-        .get(
-            &format!("/bitable/v1/apps/{app_token}/tables"),
-            &[],
-        )
+        .get(&format!("/bitable/v1/apps/{app_token}/tables"), &[])
         .await
 }
 
@@ -243,19 +237,12 @@ pub async fn add_table(
     }
     let body = json!({ "table": table });
     client
-        .post(
-            &format!("/bitable/v1/apps/{app_token}/tables"),
-            &body,
-        )
+        .post(&format!("/bitable/v1/apps/{app_token}/tables"), &body)
         .await
 }
 
 /// 删除表格
-pub async fn delete_table(
-    client: &TabClient,
-    app_token: &str,
-    table_id: &str,
-) -> Result<Value> {
+pub async fn delete_table(client: &TabClient, app_token: &str, table_id: &str) -> Result<Value> {
     client
         .delete(
             &format!("/bitable/v1/apps/{app_token}/tables/{table_id}"),
@@ -298,11 +285,7 @@ pub async fn get_view(
 // ── App ──────────────────────────────
 
 /// 创建多维表格应用
-pub async fn create_app(
-    client: &TabClient,
-    name: &str,
-    extra: Option<&Value>,
-) -> Result<Value> {
+pub async fn create_app(client: &TabClient, name: &str, extra: Option<&Value>) -> Result<Value> {
     let mut body = json!({ "name": name });
     if let Some(ext) = extra {
         if let Some(obj) = ext.as_object() {

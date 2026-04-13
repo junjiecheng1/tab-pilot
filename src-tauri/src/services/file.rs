@@ -60,11 +60,13 @@ impl FileService {
             .await
             .map_err(|e| ServiceError::internal(format!("读取失败: {e}")))?;
 
+        let lines: Vec<&str> = content.lines().collect();
+        let total_lines = lines.len();
+
         // 行范围过滤
         let result_content = if start_line.is_some() || end_line.is_some() {
-            let lines: Vec<&str> = content.lines().collect();
             let start = start_line.unwrap_or(0);
-            let end = end_line.unwrap_or(lines.len()).min(lines.len());
+            let end = end_line.unwrap_or(total_lines).min(total_lines);
             lines[start..end].join("\n")
         } else {
             content.clone()
@@ -74,6 +76,7 @@ impl FileService {
         Ok(json!({
             "path": abs.to_string_lossy(),
             "content": result_content,
+            "total_lines": total_lines,
             "size": meta.as_ref().map(|m| m.len()),
         }))
     }
@@ -181,10 +184,16 @@ impl FileService {
         if !abs.is_dir() {
             return Err(ServiceError::bad_request(format!("不是目录: {path}")));
         }
-        let entries = self.list_dir_entries(
-            &abs, recursive, show_hidden, 0,
-            max_depth.unwrap_or(3), max_files.unwrap_or(10000),
-        ).await?;
+        let entries = self
+            .list_dir_entries(
+                &abs,
+                recursive,
+                show_hidden,
+                0,
+                max_depth.unwrap_or(3),
+                max_files.unwrap_or(10000),
+            )
+            .await?;
         Ok(json!({
             "path": abs.to_string_lossy(),
             "entries": entries,
@@ -268,12 +277,7 @@ impl FileService {
     }
 
     /// 字符串替换 (对应 Python str_replace)
-    pub async fn str_replace(
-        &self,
-        path: &str,
-        old_str: &str,
-        new_str: &str,
-    ) -> ServiceResult {
+    pub async fn str_replace(&self, path: &str, old_str: &str, new_str: &str) -> ServiceResult {
         let abs = self.resolve_path(path);
         if !abs.exists() {
             return Err(ServiceError::not_found(format!("文件不存在: {path}")));
@@ -311,9 +315,17 @@ impl FileService {
         let abs = self.resolve_path(path);
 
         // 优先用 ripgrep (外部命令, 不需要安装也不会报错)
-        if let Ok(rg_result) = self.grep_with_rg(
-            &abs, pattern, max_results, &include, case_insensitive, fixed_strings,
-        ).await {
+        if let Ok(rg_result) = self
+            .grep_with_rg(
+                &abs,
+                pattern,
+                max_results,
+                &include,
+                case_insensitive,
+                fixed_strings,
+            )
+            .await
+        {
             return Ok(rg_result);
         }
 
@@ -323,7 +335,9 @@ impl FileService {
         }
 
         if abs.is_dir() {
-            return self.grep_dir_recursive(&abs, pattern, max_results, case_insensitive).await;
+            return self
+                .grep_dir_recursive(&abs, pattern, max_results, case_insensitive)
+                .await;
         }
 
         Err(ServiceError::not_found(format!("路径不存在: {path}")))
@@ -341,7 +355,8 @@ impl FileService {
     ) -> Result<Value, ServiceError> {
         let mut cmd = tokio::process::Command::new("rg");
         cmd.arg("--json")
-            .arg("--max-count").arg(max_results.to_string());
+            .arg("--max-count")
+            .arg(max_results.to_string());
 
         if case_insensitive {
             cmd.arg("-i");
@@ -357,7 +372,9 @@ impl FileService {
 
         cmd.arg(pattern).arg(path);
 
-        let output = cmd.output().await
+        let output = cmd
+            .output()
+            .await
             .map_err(|e| ServiceError::internal(format!("rg 执行失败: {e}")))?;
 
         // rg exit 2 = 真错误
@@ -370,10 +387,18 @@ impl FileService {
         let mut files_matched = std::collections::HashSet::new();
 
         for line in stdout.lines() {
-            if line.is_empty() { continue; }
-            let Ok(msg) = serde_json::from_str::<Value>(line) else { continue };
-            if msg["type"].as_str() != Some("match") { continue; }
-            if matches.len() >= max_results { break; }
+            if line.is_empty() {
+                continue;
+            }
+            let Ok(msg) = serde_json::from_str::<Value>(line) else {
+                continue;
+            };
+            if msg["type"].as_str() != Some("match") {
+                continue;
+            }
+            if matches.len() >= max_results {
+                break;
+            }
 
             let data = &msg["data"];
             let file_path = data["path"]["text"].as_str().unwrap_or("");
@@ -439,9 +464,22 @@ impl FileService {
     ) -> ServiceResult {
         let mut matches = Vec::new();
         let mut files_matched = std::collections::HashSet::new();
-        let pattern_lower = if case_insensitive { pattern.to_lowercase() } else { String::new() };
+        let pattern_lower = if case_insensitive {
+            pattern.to_lowercase()
+        } else {
+            String::new()
+        };
 
-        self.grep_walk(dir, pattern, &pattern_lower, case_insensitive, max_results, &mut matches, &mut files_matched).await;
+        self.grep_walk(
+            dir,
+            pattern,
+            &pattern_lower,
+            case_insensitive,
+            max_results,
+            &mut matches,
+            &mut files_matched,
+        )
+        .await;
 
         Ok(json!({
             "path": dir.to_string_lossy(),
@@ -464,37 +502,79 @@ impl FileService {
         files_matched: &'a mut std::collections::HashSet<String>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            if matches.len() >= max_results { return; }
+            if matches.len() >= max_results {
+                return;
+            }
 
-            let Ok(mut read_dir) = fs::read_dir(dir).await else { return };
+            let Ok(mut read_dir) = fs::read_dir(dir).await else {
+                return;
+            };
             while let Ok(Some(entry)) = read_dir.next_entry().await {
-                if matches.len() >= max_results { break; }
+                if matches.len() >= max_results {
+                    break;
+                }
 
                 let path = entry.path();
                 let name = entry.file_name().to_string_lossy().to_string();
 
                 // 跳过隐藏文件和常见忽略目录
-                if name.starts_with('.') || name == "node_modules" || name == "target" || name == "__pycache__" {
+                if name.starts_with('.')
+                    || name == "node_modules"
+                    || name == "target"
+                    || name == "__pycache__"
+                {
                     continue;
                 }
 
                 let is_dir = entry.metadata().await.map(|m| m.is_dir()).unwrap_or(false);
 
                 if is_dir {
-                    self.grep_walk(&path, pattern, pattern_lower, case_insensitive, max_results, matches, files_matched).await;
+                    self.grep_walk(
+                        &path,
+                        pattern,
+                        pattern_lower,
+                        case_insensitive,
+                        max_results,
+                        matches,
+                        files_matched,
+                    )
+                    .await;
                 } else {
                     // 跳过二进制文件 (简单判断: 后缀)
                     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-                    if matches!(ext, "png" | "jpg" | "jpeg" | "gif" | "ico" | "woff" | "woff2" | "ttf" | "eot" | "zip" | "tar" | "gz" | "pdf" | "exe" | "dll" | "so" | "dylib") {
+                    if matches!(
+                        ext,
+                        "png"
+                            | "jpg"
+                            | "jpeg"
+                            | "gif"
+                            | "ico"
+                            | "woff"
+                            | "woff2"
+                            | "ttf"
+                            | "eot"
+                            | "zip"
+                            | "tar"
+                            | "gz"
+                            | "pdf"
+                            | "exe"
+                            | "dll"
+                            | "so"
+                            | "dylib"
+                    ) {
                         continue;
                     }
 
                     // 读取并搜索
-                    let Ok(content) = fs::read_to_string(&path).await else { continue };
+                    let Ok(content) = fs::read_to_string(&path).await else {
+                        continue;
+                    };
                     let file_path_str = path.to_string_lossy().to_string();
 
                     for (i, line) in content.lines().enumerate() {
-                        if matches.len() >= max_results { break; }
+                        if matches.len() >= max_results {
+                            break;
+                        }
 
                         let found = if case_insensitive {
                             line.to_lowercase().contains(pattern_lower)
@@ -529,7 +609,8 @@ impl FileService {
         }
 
         let mut results = Vec::new();
-        self.walk_glob(&abs, &abs, pattern, max_results, &mut results).await;
+        self.walk_glob(&abs, &abs, pattern, max_results, &mut results)
+            .await;
 
         Ok(json!({
             "path": abs.to_string_lossy(),
@@ -571,7 +652,8 @@ impl FileService {
                 let show_hidden = params["show_hidden"].as_bool().unwrap_or(false);
                 let max_depth = params["max_depth"].as_u64().map(|v| v as usize);
                 let max_files = params["max_files"].as_u64().map(|v| v as usize);
-                self.list_dir(path, recursive, show_hidden, max_depth, max_files).await
+                self.list_dir(path, recursive, show_hidden, max_depth, max_files)
+                    .await
             }
             "mkdir" => {
                 let path = req_str(&params, "path")?;
@@ -605,12 +687,22 @@ impl FileService {
                 let path = req_str(&params, "path")?;
                 let pattern = req_str(&params, "pattern")?;
                 let max = params["max_results"].as_u64().unwrap_or(100) as usize;
-                let include: Option<Vec<String>> = params["include"]
-                    .as_array()
-                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
+                let include: Option<Vec<String>> = params["include"].as_array().map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                });
                 let case_insensitive = params["case_insensitive"].as_bool().unwrap_or(false);
                 let fixed_strings = params["fixed_strings"].as_bool().unwrap_or(false);
-                self.grep(&path, &pattern, max, include, case_insensitive, fixed_strings).await
+                self.grep(
+                    &path,
+                    &pattern,
+                    max,
+                    include,
+                    case_insensitive,
+                    fixed_strings,
+                )
+                .await
             }
             "find" | "find_by_name" => {
                 let path = req_str(&params, "path")?;
@@ -618,7 +710,9 @@ impl FileService {
                 let max = params["max_results"].as_u64().unwrap_or(5000) as usize;
                 self.find_by_name(&path, &pattern, max).await
             }
-            _ => Err(ServiceError::bad_request(format!("未知 file 操作: {action}"))),
+            _ => Err(ServiceError::bad_request(format!(
+                "未知 file 操作: {action}"
+            ))),
         }
     }
 
@@ -641,7 +735,9 @@ impl FileService {
         depth: usize,
         max_depth: usize,
         max_files: usize,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<Value>, ServiceError>> + Send + 'a>> {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Vec<Value>, ServiceError>> + Send + 'a>,
+    > {
         Box::pin(async move {
             let mut entries = Vec::new();
             let mut read_dir = fs::read_dir(dir)
@@ -653,7 +749,9 @@ impl FileService {
                 .await
                 .map_err(|e| ServiceError::internal(format!("目录遍历失败: {e}")))?
             {
-                if entries.len() >= max_files { break; }
+                if entries.len() >= max_files {
+                    break;
+                }
 
                 let path = entry.path();
                 let name = entry.file_name().to_string_lossy().to_string();
@@ -677,7 +775,14 @@ impl FileService {
 
                 if recursive && is_dir && depth < max_depth {
                     let children = self
-                        .list_dir_entries(&path, recursive, show_hidden, depth + 1, max_depth, max_files)
+                        .list_dir_entries(
+                            &path,
+                            recursive,
+                            show_hidden,
+                            depth + 1,
+                            max_depth,
+                            max_files,
+                        )
                         .await?;
                     e["children"] = json!(children);
                 }
@@ -689,7 +794,10 @@ impl FileService {
                 let a_dir = a["is_dir"].as_bool().unwrap_or(false);
                 let b_dir = b["is_dir"].as_bool().unwrap_or(false);
                 b_dir.cmp(&a_dir).then_with(|| {
-                    a["name"].as_str().unwrap_or("").cmp(b["name"].as_str().unwrap_or(""))
+                    a["name"]
+                        .as_str()
+                        .unwrap_or("")
+                        .cmp(b["name"].as_str().unwrap_or(""))
                 })
             });
 
@@ -707,17 +815,25 @@ impl FileService {
         results: &'a mut Vec<Value>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            if results.len() >= max_results { return; }
+            if results.len() >= max_results {
+                return;
+            }
 
-            let Ok(mut read_dir) = fs::read_dir(dir).await else { return };
+            let Ok(mut read_dir) = fs::read_dir(dir).await else {
+                return;
+            };
             while let Ok(Some(entry)) = read_dir.next_entry().await {
-                if results.len() >= max_results { break; }
+                if results.len() >= max_results {
+                    break;
+                }
 
                 let path = entry.path();
                 let name = entry.file_name().to_string_lossy().to_string();
 
                 // 跳过隐藏
-                if name.starts_with('.') { continue; }
+                if name.starts_with('.') {
+                    continue;
+                }
 
                 let is_dir = entry.metadata().await.map(|m| m.is_dir()).unwrap_or(false);
 
@@ -733,7 +849,8 @@ impl FileService {
                 }
 
                 if is_dir {
-                    self.walk_glob(base, &path, pattern, max_results, results).await;
+                    self.walk_glob(base, &path, pattern, max_results, results)
+                        .await;
                 }
             }
         })
@@ -748,18 +865,26 @@ fn glob_match(pattern: &str, name: &str) -> bool {
 }
 
 fn glob_match_inner(p: &[char], n: &[char], pi: usize, ni: usize) -> bool {
-    if pi == p.len() && ni == n.len() { return true; }
-    if pi == p.len() { return false; }
+    if pi == p.len() && ni == n.len() {
+        return true;
+    }
+    if pi == p.len() {
+        return false;
+    }
 
     if p[pi] == '*' {
         // * 匹配 0 或多个字符
         for skip in ni..=n.len() {
-            if glob_match_inner(p, n, pi + 1, skip) { return true; }
+            if glob_match_inner(p, n, pi + 1, skip) {
+                return true;
+            }
         }
         return false;
     }
 
-    if ni == n.len() { return false; }
+    if ni == n.len() {
+        return false;
+    }
 
     if p[pi] == '?' || p[pi] == n[ni] {
         glob_match_inner(p, n, pi + 1, ni + 1)

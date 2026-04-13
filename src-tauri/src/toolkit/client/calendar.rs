@@ -66,7 +66,10 @@ pub async fn search_events(
             all_events.extend(items.clone());
         }
 
-        let has_more = resp.get("has_more").and_then(|v| v.as_bool()).unwrap_or(false);
+        let has_more = resp
+            .get("has_more")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         if !has_more {
             break;
         }
@@ -129,11 +132,7 @@ pub async fn create_event(
 }
 
 /// 删除日历事件
-pub async fn delete_event(
-    client: &TabClient,
-    calendar_id: &str,
-    event_id: &str,
-) -> Result<Value> {
+pub async fn delete_event(client: &TabClient, calendar_id: &str, event_id: &str) -> Result<Value> {
     client
         .delete(
             &format!("/calendar/v4/calendars/{calendar_id}/events/{event_id}"),
@@ -154,7 +153,5 @@ pub async fn get_free_times(
         "time_max": end_time,
         "user_id": user_ids.first().unwrap_or(&String::new()),
     });
-    client
-        .post("/calendar/v4/freebusy/list", &body)
-        .await
+    client.post("/calendar/v4/freebusy/list", &body).await
 }

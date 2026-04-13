@@ -1,6 +1,6 @@
+use crate::infra::tools::downloader::{download_and_extract, download_binary};
+use crate::infra::tools::registry::{platform_key, tool_list, ToolKind};
 use std::path::{Path, PathBuf};
-use crate::infra::tools::registry::{tool_list, ToolKind, platform_key};
-use crate::infra::tools::downloader::{download_binary, download_and_extract};
 
 /// CLI 工具管理器
 pub struct ToolsManager {
@@ -12,7 +12,10 @@ impl ToolsManager {
     pub fn new(_data_dir: &Path, oss_url: &str) -> Self {
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
         let tools_dir = home.join(".tabpilot").join("runtime").join("tools");
-        Self { tools_dir, oss_url: oss_url.to_string() }
+        Self {
+            tools_dir,
+            oss_url: oss_url.to_string(),
+        }
     }
 
     /// 从 home 目录创建 (默认路径, 默认 URL)
@@ -35,9 +38,15 @@ impl ToolsManager {
         // Archive 类型工具的子目录也加入 PATH
         for (name, kind, _) in tool_list() {
             if matches!(kind, ToolKind::Archive) {
-                let sub_dir = self.tools_dir.join(name);
-                if sub_dir.exists() {
-                    dirs.push(sub_dir);
+                if let Some(entry) = self.find_archive_entry(name) {
+                    if let Some(parent) = entry.parent() {
+                        dirs.push(parent.to_path_buf());
+                    }
+                } else {
+                    let sub_dir = self.tools_dir.join(name);
+                    if sub_dir.exists() {
+                        dirs.push(sub_dir);
+                    }
                 }
             }
         }
@@ -49,16 +58,15 @@ impl ToolsManager {
         for (name, kind, _) in tool_list() {
             let exists = match kind {
                 ToolKind::Binary | ToolKind::TarGzDirect => {
-                    let bin_name = if cfg!(windows) { format!("{name}.exe") } else { name.to_string() };
+                    let bin_name = if cfg!(windows) {
+                        format!("{name}.exe")
+                    } else {
+                        name.to_string()
+                    };
                     self.tools_dir.join(&bin_name).exists()
                 }
                 ToolKind::Archive => {
-                    let entry = if cfg!(windows) {
-                        self.tools_dir.join(name).join(format!("{name}.exe"))
-                    } else {
-                        self.tools_dir.join(name).join(name)
-                    };
-                    entry.exists()
+                    self.find_archive_entry(name).is_some()
                 }
             };
             if !exists {
@@ -83,25 +91,38 @@ impl ToolsManager {
 
             let (entry_bin, url, dest_dir, is_archive) = match kind {
                 ToolKind::Binary => {
-                    let bin_name = if cfg!(windows) { format!("{name}.exe") } else { name.to_string() };
+                    let bin_name = if cfg!(windows) {
+                        format!("{name}.exe")
+                    } else {
+                        name.to_string()
+                    };
                     let bin_path = self.tools_dir.join(&bin_name);
                     let url = format!("{}/{platform}/{bin_name}", prefix);
                     (bin_path.clone(), url, bin_path, false)
                 }
                 ToolKind::TarGzDirect => {
-                    let bin_name = if cfg!(windows) { format!("{name}.exe") } else { name.to_string() };
+                    let bin_name = if cfg!(windows) {
+                        format!("{name}.exe")
+                    } else {
+                        name.to_string()
+                    };
                     let bin_path = self.tools_dir.join(&bin_name);
                     let url = format!("{}/{platform}/{name}.tar.gz", prefix);
                     (bin_path, url, self.tools_dir.clone(), true)
                 }
                 ToolKind::Archive => {
-                    let dest_dir = self.tools_dir.join(name);
-                    let entry_bin = if cfg!(windows) { dest_dir.join(format!("{name}.exe")) } else { dest_dir.join(name) };
+                    let dest_dir = self.tools_dir.clone();
+                    let entry_bin = self.archive_entry_candidate(&self.tools_dir.join(name), name);
                     let url = format!("{}/{platform}/{name}.tar.gz", prefix);
-                    let _ = std::fs::create_dir_all(&dest_dir);
+                    let _ = std::fs::create_dir_all(&self.tools_dir);
                     (entry_bin, url, dest_dir, true)
                 }
             };
+
+            if matches!(kind, ToolKind::Archive) && self.find_archive_entry(name).is_some() {
+                log::info!("[Tools] {name} 已存在, 跳过");
+                continue;
+            }
 
             if entry_bin.exists() {
                 log::info!("[Tools] {name} 已存在, 跳过");
@@ -130,13 +151,13 @@ impl ToolsManager {
         if !dynamic_version {
             return self.oss_url.clone();
         }
-        
+
         if let Ok(platform_key) = platform_key() {
             let version_url = format!(
                 "https://crafto.oss-cn-beijing.aliyuncs.com/tools/tabpilot-tools/{platform}/{name}-version.txt",
                 platform=platform_key, name=name
             );
-            
+
             log::info!("[Tools] 探测 {name} 动态版本: {version_url}");
             match reqwest::get(&version_url).await {
                 Ok(resp) if resp.status().is_success() => {
@@ -151,7 +172,44 @@ impl ToolsManager {
                 _ => log::warn!("[Tools] 无法获取 {name} 的动态版本号，回退到默认路径"),
             }
         }
-        
+
         self.oss_url.clone()
+    }
+
+    fn archive_entry_candidate(&self, dest_dir: &Path, name: &str) -> PathBuf {
+        if cfg!(windows) {
+            dest_dir.join(format!("{name}.exe"))
+        } else {
+            dest_dir.join(name)
+        }
+    }
+
+    fn find_archive_entry(&self, name: &str) -> Option<PathBuf> {
+        let tool_dir = self.tools_dir.join(name);
+        self.find_archive_entry_in_dir(&tool_dir, name, 4)
+    }
+
+    fn find_archive_entry_in_dir(&self, dir: &Path, name: &str, remaining_depth: usize) -> Option<PathBuf> {
+        let direct = self.archive_entry_candidate(dir, name);
+        if direct.exists() {
+            return Some(direct);
+        }
+
+        if remaining_depth == 0 {
+            return None;
+        }
+
+        let entries = std::fs::read_dir(dir).ok()?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            if let Some(found) = self.find_archive_entry_in_dir(&path, name, remaining_depth - 1) {
+                return Some(found);
+            }
+        }
+
+        None
     }
 }

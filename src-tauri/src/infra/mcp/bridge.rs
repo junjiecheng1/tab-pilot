@@ -69,7 +69,11 @@ impl McpBridge {
         match std::fs::read_to_string(&file) {
             Ok(content) => match serde_json::from_str::<McpConfig>(&content) {
                 Ok(cfg) => {
-                    log::info!("[MCP] 加载配置: {:?} ({} 个服务器)", file, cfg.servers.len());
+                    log::info!(
+                        "[MCP] 加载配置: {:?} ({} 个服务器)",
+                        file,
+                        cfg.servers.len()
+                    );
                     Some(cfg)
                 }
                 Err(e) => {
@@ -113,30 +117,43 @@ impl McpBridge {
     }
 
     /// 初始化会话并列出工具 (HTTP / stdio 通用)
-    async fn init_and_list<S: McpSession>(session: &mut S, server: &str) -> Result<Vec<McpToolInfo>, String> {
+    async fn init_and_list<S: McpSession>(
+        session: &mut S,
+        server: &str,
+    ) -> Result<Vec<McpToolInfo>, String> {
         session.initialize().await?;
         let raw_tools = session.list_tools().await?;
-        let tools: Vec<McpToolInfo> = raw_tools.iter().map(|t| {
-            let info = Self::parse_tool_info(server, t);
-            log::info!("[MCP] 发现工具: {}/{}", server, info.name);
-            info
-        }).collect();
+        let tools: Vec<McpToolInfo> = raw_tools
+            .iter()
+            .map(|t| {
+                let info = Self::parse_tool_info(server, t);
+                log::info!("[MCP] 发现工具: {}/{}", server, info.name);
+                info
+            })
+            .collect();
         Ok(tools)
     }
 
     /// 启动 stdio 服务器 + 初始化 + 收集工具
     async fn spawn_stdio(&mut self, name: &str) -> Result<Vec<McpToolInfo>, String> {
-        let (cmd, args, env) = self.stdio_configs.get(name)
+        let (cmd, args, env) = self
+            .stdio_configs
+            .get(name)
             .ok_or_else(|| format!("{name} 不在 stdio 配置中"))?
             .clone();
 
-        let runtime = self.runtime.as_ref()
+        let runtime = self
+            .runtime
+            .as_ref()
             .ok_or_else(|| format!("{name} 需要 RuntimeManager 但未注入"))?;
 
-        runtime.ensure_ready(|_| {}).await
+        runtime
+            .ensure_ready(|_| {})
+            .await
             .map_err(|e| format!("{name} 运行时未就绪: {e}"))?;
 
-        let mut session = StdioSession::spawn(runtime, &cmd, &args, &env).await
+        let mut session = StdioSession::spawn(runtime, &cmd, &args, &env)
+            .await
             .map_err(|e| format!("{name} 启动失败: {e}"))?;
 
         let tools = Self::init_and_list(&mut session, name).await?;
@@ -146,7 +163,10 @@ impl McpBridge {
 
     /// 调用指定服务器的工具
     pub async fn call(
-        &mut self, server: &str, tool: &str, args: serde_json::Value,
+        &mut self,
+        server: &str,
+        tool: &str,
+        args: serde_json::Value,
     ) -> Result<serde_json::Value, String> {
         if let Some(session) = self.http_sessions.get_mut(server) {
             if session.session_id.is_none() {
@@ -175,10 +195,7 @@ impl McpBridge {
         names
     }
 
-    pub async fn list_tools_for(
-        &mut self,
-        server: &str,
-    ) -> Result<Vec<serde_json::Value>, String> {
+    pub async fn list_tools_for(&mut self, server: &str) -> Result<Vec<serde_json::Value>, String> {
         if let Some(session) = self.http_sessions.get_mut(server) {
             if session.session_id.is_none() {
                 session.initialize().await?;
@@ -206,7 +223,8 @@ impl McpBridge {
                 } else {
                     "stdio"
                 };
-                let connected = self.http_sessions
+                let connected = self
+                    .http_sessions
                     .get(&name)
                     .map(|session| session.session_id.is_some())
                     .or_else(|| self.stdio_sessions.get(&name).map(|_| true))
@@ -239,7 +257,8 @@ impl McpBridge {
             server: server.to_string(),
             name: tool["name"].as_str().unwrap_or("").to_string(),
             description: tool["description"].as_str().unwrap_or("").to_string(),
-            input_schema: tool.get("inputSchema")
+            input_schema: tool
+                .get("inputSchema")
                 .cloned()
                 .unwrap_or(serde_json::Value::Object(Default::default())),
         }

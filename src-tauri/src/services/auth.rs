@@ -184,7 +184,9 @@ impl AuthService {
                 let count = self.cleanup_expired().await;
                 Ok(json!({"cleaned": count}))
             }
-            _ => Err(ServiceError::bad_request(format!("未知 auth 操作: {action}"))),
+            _ => Err(ServiceError::bad_request(format!(
+                "未知 auth 操作: {action}"
+            ))),
         }
     }
 }

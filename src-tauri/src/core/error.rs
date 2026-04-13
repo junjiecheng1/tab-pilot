@@ -16,37 +16,65 @@ pub struct ServiceError {
 /// 错误码 — 对应 HTTP 状态码语义
 #[derive(Debug, Clone, Copy, Serialize)]
 pub enum ErrorCode {
-    BadRequest,        // 400
-    Unauthorized,      // 401
-    Forbidden,         // 403
-    NotFound,          // 404
-    Timeout,           // 408
-    Conflict,          // 409
-    Internal,          // 500
+    BadRequest,         // 400
+    Unauthorized,       // 401
+    Forbidden,          // 403
+    NotFound,           // 404
+    Timeout,            // 408
+    Conflict,           // 409
+    Internal,           // 500
     ServiceUnavailable, // 503
 }
 
 impl ServiceError {
     pub fn bad_request(msg: impl Into<String>) -> Self {
-        Self { code: ErrorCode::BadRequest, message: msg.into(), data: None }
+        Self {
+            code: ErrorCode::BadRequest,
+            message: msg.into(),
+            data: None,
+        }
     }
     pub fn not_found(msg: impl Into<String>) -> Self {
-        Self { code: ErrorCode::NotFound, message: msg.into(), data: None }
+        Self {
+            code: ErrorCode::NotFound,
+            message: msg.into(),
+            data: None,
+        }
     }
     pub fn unauthorized(msg: impl Into<String>) -> Self {
-        Self { code: ErrorCode::Unauthorized, message: msg.into(), data: None }
+        Self {
+            code: ErrorCode::Unauthorized,
+            message: msg.into(),
+            data: None,
+        }
     }
     pub fn forbidden(msg: impl Into<String>) -> Self {
-        Self { code: ErrorCode::Forbidden, message: msg.into(), data: None }
+        Self {
+            code: ErrorCode::Forbidden,
+            message: msg.into(),
+            data: None,
+        }
     }
     pub fn timeout(msg: impl Into<String>) -> Self {
-        Self { code: ErrorCode::Timeout, message: msg.into(), data: None }
+        Self {
+            code: ErrorCode::Timeout,
+            message: msg.into(),
+            data: None,
+        }
     }
     pub fn internal(msg: impl Into<String>) -> Self {
-        Self { code: ErrorCode::Internal, message: msg.into(), data: None }
+        Self {
+            code: ErrorCode::Internal,
+            message: msg.into(),
+            data: None,
+        }
     }
     pub fn unavailable(msg: impl Into<String>) -> Self {
-        Self { code: ErrorCode::ServiceUnavailable, message: msg.into(), data: None }
+        Self {
+            code: ErrorCode::ServiceUnavailable,
+            message: msg.into(),
+            data: None,
+        }
     }
 
     pub fn with_data(mut self, data: serde_json::Value) -> Self {

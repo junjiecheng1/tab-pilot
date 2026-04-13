@@ -7,8 +7,8 @@
 //   session — 传输会话 (HttpSession, StdioSession)
 //   bridge  — 统一管理层 (McpBridge)
 
+mod bridge;
 mod config;
 mod session;
-mod bridge;
 
 pub use bridge::McpBridge;

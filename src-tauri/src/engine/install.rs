@@ -201,9 +201,7 @@ async fn fetch_from_npmmirror() -> Result<(String, String), String> {
 
 /// 比较两个版本号 (a.b.c.d 格式)
 fn compare_versions(a: &str, b: &str) -> std::cmp::Ordering {
-    let parse = |s: &str| -> Vec<u32> {
-        s.split('.').filter_map(|p| p.parse().ok()).collect()
-    };
+    let parse = |s: &str| -> Vec<u32> { s.split('.').filter_map(|p| p.parse().ok()).collect() };
     parse(a).cmp(&parse(b))
 }
 
@@ -416,7 +414,11 @@ pub fn run_install(with_deps: bool) {
 
     match extract_zip(bytes, &dest) {
         Ok(()) => {
-            log::info!("Chrome {} installed successfully at {}", version, dest.display());
+            log::info!(
+                "Chrome {} installed successfully at {}",
+                version,
+                dest.display()
+            );
             if is_linux && !with_deps {
                 log::warn!("If you see shared library errors, run install --with-deps");
             }
@@ -607,7 +609,10 @@ fn install_linux_deps() {
                 }
             }
             Err(e) => {
-                log::warn!("Could not simulate install ({}). Proceeding with caution.", e);
+                log::warn!(
+                    "Could not simulate install ({}). Proceeding with caution.",
+                    e
+                );
             }
         }
 

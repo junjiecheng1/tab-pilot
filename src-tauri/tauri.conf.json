@@ -1,6 +1,6 @@
 {
   "productName": "TabPilot",
-  "version": "0.4.8",
+  "version": "0.4.9",
   "identifier": "com.tabapp.pilot",
   "build": {
     "frontendDist": "../dist",
@@ -25,7 +25,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' http://localhost:8080 ws://localhost:8080 https://www.syxc.art wss://www.syxc.art"
+      "csp": "default-src 'self'; connect-src 'self' http://localhost:8080 ws://localhost:8080 https://www.xtabapp.com wss://www.xtabapp.com"
     }
   },
   "plugins": {

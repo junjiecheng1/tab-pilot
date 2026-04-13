@@ -3,8 +3,8 @@
 // 分两步写入: log_start (执行前) → log_finish (执行后)
 // 这样即使执行中崩溃, 也能看到"开始了但没完成"的记录
 
-use std::path::PathBuf;
 use log;
+use std::path::PathBuf;
 
 /// 审计日志
 pub struct AuditLog {
@@ -41,17 +41,21 @@ impl AuditLog {
                 duration REAL,
                 guard_decision TEXT,
                 status TEXT DEFAULT 'started'
-            )"
-        ).execute(&db).await;
+            )",
+        )
+        .execute(&db)
+        .await;
 
         // 迁移: 旧表可能没有 status 列
-        let _ = sqlx::query(
-            "ALTER TABLE audit_log ADD COLUMN status TEXT DEFAULT 'completed'"
-        ).execute(&db).await;
+        let _ = sqlx::query("ALTER TABLE audit_log ADD COLUMN status TEXT DEFAULT 'completed'")
+            .execute(&db)
+            .await;
 
         let _ = sqlx::query(
-            "CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp DESC)"
-        ).execute(&db).await;
+            "CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp DESC)",
+        )
+        .execute(&db)
+        .await;
     }
 
     /// 执行前记录 — 返回 log_id, 用于 log_finish 更新
@@ -104,7 +108,7 @@ impl AuditLog {
 
         let _ = sqlx::query(
             "UPDATE audit_log SET result = ?, exit_code = ?, duration = ?, status = ?
-             WHERE id = ?"
+             WHERE id = ?",
         )
         .bind(result)
         .bind(exit_code)

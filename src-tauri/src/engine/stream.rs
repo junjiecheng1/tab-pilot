@@ -104,7 +104,11 @@ impl StreamServer {
         let client_notify = Arc::new(Notify::new());
         let screencasting = Arc::new(Mutex::new(false));
         // 用传入的 page session_id 初始化，而非 None
-        let cdp_session_id = Arc::new(RwLock::new(if session_id.is_empty() { None } else { Some(session_id) }));
+        let cdp_session_id = Arc::new(RwLock::new(if session_id.is_empty() {
+            None
+        } else {
+            Some(session_id)
+        }));
 
         let frame_tx_clone = frame_tx.clone();
         let client_count_clone = client_count.clone();

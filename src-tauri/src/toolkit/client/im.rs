@@ -37,10 +37,7 @@ pub async fn list_messages(
         params.push(("sort_type", s.to_string()));
     }
 
-    let str_params: Vec<(&str, &str)> = params
-        .iter()
-        .map(|(k, v)| (*k, v.as_str()))
-        .collect();
+    let str_params: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
     client.get("/im/v1/messages", &str_params).await
 }
@@ -99,10 +96,7 @@ pub async fn list_chats(
         params.push(("sort_type", s.to_string()));
     }
 
-    let str_params: Vec<(&str, &str)> = params
-        .iter()
-        .map(|(k, v)| (*k, v.as_str()))
-        .collect();
+    let str_params: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
     client.get("/im/v1/chats", &str_params).await
 }
@@ -122,22 +116,14 @@ pub async fn search_chats(
         params.push(("page_token", pt.to_string()));
     }
 
-    let str_params: Vec<(&str, &str)> = params
-        .iter()
-        .map(|(k, v)| (*k, v.as_str()))
-        .collect();
+    let str_params: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
     client.get("/im/v1/chats/search", &str_params).await
 }
 
 /// 获取群聊详情
-pub async fn get_chat_info(
-    client: &TabClient,
-    chat_id: &str,
-) -> Result<Value> {
-    client
-        .get(&format!("/im/v1/chats/{chat_id}"), &[])
-        .await
+pub async fn get_chat_info(client: &TabClient, chat_id: &str) -> Result<Value> {
+    client.get(&format!("/im/v1/chats/{chat_id}"), &[]).await
 }
 
 /// 分页列出群成员
@@ -152,16 +138,10 @@ pub async fn list_chat_members(
         params.push(("page_token", pt.to_string()));
     }
 
-    let str_params: Vec<(&str, &str)> = params
-        .iter()
-        .map(|(k, v)| (*k, v.as_str()))
-        .collect();
+    let str_params: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
     client
-        .get(
-            &format!("/im/v1/chats/{chat_id}/members"),
-            &str_params,
-        )
+        .get(&format!("/im/v1/chats/{chat_id}/members"), &str_params)
         .await
 }
 
@@ -199,41 +179,23 @@ pub async fn reply_message(
         "content": content,
     });
     client
-        .post(
-            &format!("/im/v1/messages/{message_id}/reply"),
-            &body,
-        )
+        .post(&format!("/im/v1/messages/{message_id}/reply"), &body)
         .await
 }
 
 /// 获取单条消息
-pub async fn get_message(
-    client: &TabClient,
-    message_id: &str,
-) -> Result<Value> {
+pub async fn get_message(client: &TabClient, message_id: &str) -> Result<Value> {
     client
-        .get(
-            &format!("/im/v1/messages/{message_id}"),
-            &[],
-        )
+        .get(&format!("/im/v1/messages/{message_id}"), &[])
         .await
 }
 
 /// 获取与用户的单聊 chat_id
 /// 移植自: aily_im/commands/chats.py p2p_chatid
-pub async fn p2p_chat_id(
-    client: &TabClient,
-    user_id: &str,
-    id_type: &str,
-) -> Result<Value> {
+pub async fn p2p_chat_id(client: &TabClient, user_id: &str, id_type: &str) -> Result<Value> {
     // 飞书没有直接的 p2p API，用 list + filter 实现
-    let chats: PageData<Value> = client
-        .get(
-            "/im/v1/chats",
-            &[("page_size", "100")],
-        )
-        .await?;
-    
+    let chats: PageData<Value> = client.get("/im/v1/chats", &[("page_size", "100")]).await?;
+
     for chat in &chats.items {
         let chat_type = chat.get("chat_type").and_then(|v| v.as_str()).unwrap_or("");
         if chat_type == "p2p" {
@@ -244,7 +206,7 @@ pub async fn p2p_chat_id(
             }
         }
     }
-    
+
     Err(super::TabClientError::Other(format!(
         "未找到与用户 {user_id} 的单聊"
     )))

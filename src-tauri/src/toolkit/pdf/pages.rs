@@ -3,9 +3,9 @@
 // 移植自: aily_pdf/cmd_pages.py (158行)
 // 注意: lopdf 0.34 没有 merge_document，合并功能先标记 TODO
 
-use std::path::Path;
-use serde_json::{json, Value};
 use crate::toolkit::client::TabClientError;
+use serde_json::{json, Value};
+use std::path::Path;
 
 /// 拆分 PDF
 pub fn split_pages(
@@ -16,8 +16,7 @@ pub fn split_pages(
     let doc = lopdf::Document::load(input)
         .map_err(|e| TabClientError::Other(format!("无法打开: {e}")))?;
 
-    std::fs::create_dir_all(output_dir)
-        .map_err(|e| TabClientError::Other(e.to_string()))?;
+    std::fs::create_dir_all(output_dir).map_err(|e| TabClientError::Other(e.to_string()))?;
 
     let page_count = doc.get_pages().len() as u32;
     let ranges = page_ranges
@@ -38,7 +37,8 @@ pub fn split_pages(
 
         let filename = format!("pages_{start}-{end}.pdf");
         let out_path = output_dir.join(&filename);
-        new_doc.save(&out_path)
+        new_doc
+            .save(&out_path)
             .map_err(|e| TabClientError::Other(format!("保存失败: {e}")))?;
 
         outputs.push(json!({
@@ -55,10 +55,7 @@ pub fn split_pages(
 }
 
 /// 合并多个 PDF（逐页拷贝对象）
-pub fn merge_pdfs(
-    inputs: &[&Path],
-    output: &Path,
-) -> Result<Value, TabClientError> {
+pub fn merge_pdfs(inputs: &[&Path], output: &Path) -> Result<Value, TabClientError> {
     if inputs.is_empty() {
         return Err(TabClientError::InvalidParam("No input files".into()));
     }
@@ -88,13 +85,15 @@ pub fn merge_pdfs(
                                     if let Ok(pages_dict) = pages_obj.as_dict_mut() {
                                         if let Ok(kids) = pages_dict.get_mut(b"Kids") {
                                             if let Ok(kids_arr) = kids.as_array_mut() {
-                                                kids_arr.push(lopdf::Object::Reference(new_page_id));
+                                                kids_arr
+                                                    .push(lopdf::Object::Reference(new_page_id));
                                             }
                                         }
                                         // 更新 Count
                                         if let Ok(count) = pages_dict.get(b"Count") {
                                             if let Ok(n) = count.as_i64() {
-                                                pages_dict.set("Count", lopdf::Object::Integer(n + 1));
+                                                pages_dict
+                                                    .set("Count", lopdf::Object::Integer(n + 1));
                                             }
                                         }
                                     }

@@ -222,7 +222,11 @@ fn map_type(
 ) -> String {
     if let Some(ref r) = prop.ref_type {
         let t = resolve_ref(r, domain, domain_types);
-        return if prop.optional { format!("Option<{t}>") } else { t };
+        return if prop.optional {
+            format!("Option<{t}>")
+        } else {
+            t
+        };
     }
     if let Some(ref t) = prop.type_kind {
         let base = match t.as_str() {
@@ -232,9 +236,10 @@ fn map_type(
             "boolean" => "bool".to_string(),
             "object" | "any" => "serde_json::Value".to_string(),
             "array" => {
-                let inner = prop.items.as_ref().map_or(
-                    "serde_json::Value".to_string(),
-                    |items| {
+                let inner = prop
+                    .items
+                    .as_ref()
+                    .map_or("serde_json::Value".to_string(), |items| {
                         if let Some(ref r) = items.ref_type {
                             resolve_ref(r, domain, domain_types)
                         } else {
@@ -246,32 +251,75 @@ fn map_type(
                                 _ => "serde_json::Value".to_string(),
                             }
                         }
-                    },
-                );
+                    });
                 format!("Vec<{inner}>")
             }
             _ => "serde_json::Value".to_string(),
         };
-        return if prop.optional { format!("Option<{base}>") } else { base };
+        return if prop.optional {
+            format!("Option<{base}>")
+        } else {
+            base
+        };
     }
-    if prop.optional { "Option<serde_json::Value>".to_string() } else { "serde_json::Value".to_string() }
+    if prop.optional {
+        "Option<serde_json::Value>".to_string()
+    } else {
+        "serde_json::Value".to_string()
+    }
 }
 
 fn is_rust_keyword(s: &str) -> bool {
     matches!(
         s,
-        "type" | "self" | "Self" | "super" | "move" | "ref" | "fn"
-            | "mod" | "use" | "pub" | "let" | "mut" | "const" | "static"
-            | "if" | "else" | "for" | "while" | "loop" | "match" | "return"
-            | "break" | "continue" | "as" | "in" | "impl" | "trait"
-            | "struct" | "enum" | "where" | "async" | "await" | "dyn"
-            | "box" | "yield" | "override" | "crate" | "extern"
+        "type"
+            | "self"
+            | "Self"
+            | "super"
+            | "move"
+            | "ref"
+            | "fn"
+            | "mod"
+            | "use"
+            | "pub"
+            | "let"
+            | "mut"
+            | "const"
+            | "static"
+            | "if"
+            | "else"
+            | "for"
+            | "while"
+            | "loop"
+            | "match"
+            | "return"
+            | "break"
+            | "continue"
+            | "as"
+            | "in"
+            | "impl"
+            | "trait"
+            | "struct"
+            | "enum"
+            | "where"
+            | "async"
+            | "await"
+            | "dyn"
+            | "box"
+            | "yield"
+            | "override"
+            | "crate"
+            | "extern"
     )
 }
 
 fn field_name(name: &str) -> String {
     let snake = to_snake_case(name);
-    if is_rust_keyword(&snake) { format!("r#{snake}") } else { snake }
+    if is_rust_keyword(&snake) {
+        format!("r#{snake}")
+    } else {
+        snake
+    }
 }
 
 // ── Domain codegen ──────────────────────────────
@@ -293,16 +341,37 @@ fn emit_domain(
     for cmd in &domain.commands {
         let pascal = to_pascal_case(&cmd.name);
         if !cmd.parameters.is_empty() {
-            emit_struct(&format!("{pascal}Params"), &cmd.parameters, &domain.domain, domain_types, None, out);
+            emit_struct(
+                &format!("{pascal}Params"),
+                &cmd.parameters,
+                &domain.domain,
+                domain_types,
+                None,
+                out,
+            );
         }
         if !cmd.returns.is_empty() {
-            emit_struct(&format!("{pascal}Result"), &cmd.returns, &domain.domain, domain_types, None, out);
+            emit_struct(
+                &format!("{pascal}Result"),
+                &cmd.returns,
+                &domain.domain,
+                domain_types,
+                None,
+                out,
+            );
         }
     }
     for ev in &domain.events {
         if !ev.parameters.is_empty() {
             let pascal = to_pascal_case(&ev.name);
-            emit_struct(&format!("{pascal}Event"), &ev.parameters, &domain.domain, domain_types, None, out);
+            emit_struct(
+                &format!("{pascal}Event"),
+                &ev.parameters,
+                &domain.domain,
+                domain_types,
+                None,
+                out,
+            );
         }
     }
 
@@ -322,21 +391,35 @@ fn emit_type_def(
         out.push_str(&format!("    pub enum {} {{\n", td.id));
         for val in &td.enum_values {
             let mut variant = to_pascal_case(val);
-            if variant == "Self" { variant = "SelfValue".to_string(); }
+            if variant == "Self" {
+                variant = "SelfValue".to_string();
+            }
             if variant.chars().next().is_some_and(|c| c.is_ascii_digit()) {
                 variant = format!("V{variant}");
             }
             if seen.insert(variant.clone()) {
-                out.push_str(&format!("        #[serde(rename = \"{val}\")]\n        {variant},\n"));
+                out.push_str(&format!(
+                    "        #[serde(rename = \"{val}\")]\n        {variant},\n"
+                ));
             }
         }
         out.push_str("    }\n\n");
     } else if td.type_kind == "object" && !td.properties.is_empty() {
-        emit_struct(&td.id, &td.properties, domain, domain_types, Some(recursive_fields), out);
+        emit_struct(
+            &td.id,
+            &td.properties,
+            domain,
+            domain_types,
+            Some(recursive_fields),
+            out,
+        );
     } else if td.type_kind == "object" {
         out.push_str(&format!("    pub type {} = serde_json::Value;\n\n", td.id));
     } else if td.type_kind == "array" {
-        out.push_str(&format!("    pub type {} = Vec<serde_json::Value>;\n\n", td.id));
+        out.push_str(&format!(
+            "    pub type {} = Vec<serde_json::Value>;\n\n",
+            td.id
+        ));
     } else if td.type_kind == "string" {
         out.push_str(&format!("    pub type {} = String;\n\n", td.id));
     } else if td.type_kind == "integer" {

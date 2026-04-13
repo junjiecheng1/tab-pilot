@@ -1,159 +1,287 @@
-// 命令执行 — 写入 + 轮询等待 + 输出清洗
-//
-// 使用唯一结束标记 (__DONE__<id>__) 替代 prompt 检测
-// 解决输出中包含 $ 等 prompt 相似字符导致的误判问题
+// 命令执行 — command 级状态跟踪
 
 use std::sync::Arc;
 use std::time::Duration;
 
-use serde_json::json;
+use serde_json::{json, Value};
 use tokio::sync::Mutex;
 
 use crate::core::error::{ServiceError, ServiceResult};
 use crate::infra::pty_clean::clean_pty_output;
 
-use super::session::ShellSession;
+use super::session::{ShellCommandState, ShellSession};
 
-/// 默认轮询间隔
 const POLL_INTERVAL_MS: u64 = 100;
-/// 命令结束后额外等待 (让 exit_code 稳定)
-const POST_DONE_WAIT_MS: u64 = 50;
 
-/// 在已有会话中执行命令
+pub fn sync_command_state(session: &mut ShellSession) -> Result<(), ServiceError> {
+    session.refresh_active();
+
+    let current = match session.current_command.clone() {
+        Some(current) => current,
+        None => return Ok(()),
+    };
+
+    let raw_output = session.collector.take();
+    let cleaned_output = sanitize_command_output(&raw_output, &current.command, &current.marker);
+
+    if let Some(exit_code) = parse_marker_exit_code(&raw_output, &current.marker) {
+        session
+            .complete_current_command(cleaned_output, exit_code)
+            .map_err(ServiceError::internal)?;
+        return Ok(());
+    }
+
+    if !session.active {
+        session.interrupt_current_command(cleaned_output);
+        return Ok(());
+    }
+
+    session
+        .set_current_output(cleaned_output)
+        .map_err(ServiceError::internal)?;
+    Ok(())
+}
+
 pub async fn exec_in_session(
     session: Arc<Mutex<ShellSession>>,
     command: &str,
     timeout_secs: Option<u64>,
 ) -> ServiceResult {
     let timeout_val = timeout_secs.unwrap_or(30);
-    log::info!("[Shell] exec: timeout={}s, cmd={}", timeout_val, &command[..command.len().min(120)]);
-
-    // 生成唯一结束标记
-    let done_marker = format!("__DONE_{}__", &session.lock().await.id[..8]);
-
-    // 清空收集器 + 写入命令 (附加结束标记)
-    {
-        let mut s = session.lock().await;
-        s.collector.clear();
-        // 用 ; 连接结束标记，确保命令完成后输出标记
-        let wrapped = format!("{command}; echo {done_marker}");
-        s.write_command(&wrapped)
-            .map_err(|e| ServiceError::internal(e))?;
-    }
-
-    // 轮询等待: 结束标记出现或超时
-    let timeout = Duration::from_secs(timeout_val);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(timeout_val);
     let poll_interval = Duration::from_millis(POLL_INTERVAL_MS);
-    let deadline = tokio::time::Instant::now() + timeout;
-    let mut timed_out = false;
+
+    let (session_id, command_id) = {
+        let mut locked = session.lock().await;
+        let command_state = locked
+            .begin_command(command)
+            .map_err(ServiceError::bad_request)?;
+        let wrapped = format!("{command}\n{}", command_wrapper_line(&command_state.marker));
+        locked
+            .write_command(&wrapped)
+            .map_err(ServiceError::internal)?;
+        log::info!(
+            "[Shell] exec start: sid={}, cmd_id={}, timeout={}s",
+            &locked.id[..locked.id.len().min(8)],
+            &command_state.id[..command_state.id.len().min(8)],
+            timeout_val,
+        );
+        (locked.id.clone(), command_state.id)
+    };
 
     loop {
         tokio::time::sleep(poll_interval).await;
+        let now = tokio::time::Instant::now();
 
-        if tokio::time::Instant::now() >= deadline {
-            timed_out = true;
-            break;
-        }
+        let maybe_result = {
+            let mut locked = session.lock().await;
+            sync_command_state(&mut locked)?;
+            let (snapshot, latest) = locked
+                .snapshot_command(Some(&command_id))
+                .map_err(ServiceError::bad_request)?;
 
-        // 检查结束标记
-        let s = session.lock().await;
-        if s.collector.contains_marker(&done_marker) {
-            break;
+            if snapshot.command_done {
+                Some(command_payload(
+                    &session_id,
+                    &snapshot,
+                    locked.active,
+                    latest,
+                ))
+            } else if now >= deadline {
+                let timeout_snapshot = if locked.current_command_id() == Some(command_id.as_str()) {
+                    locked
+                        .mark_current_timed_out(snapshot.output.clone())
+                        .map_err(ServiceError::internal)?
+                } else {
+                    snapshot
+                };
+                Some(command_payload(
+                    &session_id,
+                    &timeout_snapshot,
+                    locked.active,
+                    latest,
+                ))
+            } else {
+                None
+            }
+        };
+
+        if let Some(result) = maybe_result {
+            let status = result
+                .get("status")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            let exit_code = result.get("exit_code").and_then(Value::as_i64);
+            log::info!(
+                "[Shell] exec done: sid={}, cmd_id={}, status={}, exit={:?}",
+                &session_id[..session_id.len().min(8)],
+                &command_id[..command_id.len().min(8)],
+                status,
+                exit_code,
+            );
+            return Ok(result);
         }
     }
-
-    // 标记检测到后，短暂等待让 exit_code 稳定
-    if !timed_out {
-        tokio::time::sleep(Duration::from_millis(POST_DONE_WAIT_MS)).await;
-    }
-
-    // 读取结果
-    let mut s = session.lock().await;
-    let raw_output = s.collector.take();
-    // 清洗: 去掉 PTY 控制码 + 去掉结束标记行
-    let output = clean_pty_output(&raw_output, command);
-    let output = remove_done_marker(&output, &done_marker);
-    let exit_code = s.try_exit_code();
-
-    log::info!(
-        "[Shell] exec done: sid={}, timed_out={}, exit={:?}, output_len={}",
-        &s.id[..8], timed_out, exit_code, output.len()
-    );
-
-    Ok(json!({
-        "session_id": s.id,
-        "output": output,
-        "exit_code": exit_code,
-        "active": s.active,
-    }))
 }
 
-/// 查看当前输出 (不执行命令)
 pub async fn view_output(
     session: Arc<Mutex<ShellSession>>,
+    command_id: Option<&str>,
 ) -> ServiceResult {
-    let s = session.lock().await;
-    let output = s.collector.take();
-    Ok(json!({
-        "session_id": s.id,
-        "output": output,
-        "active": s.active,
-    }))
+    let mut locked = session.lock().await;
+    sync_command_state(&mut locked)?;
+    let (snapshot, latest) = locked
+        .snapshot_command(command_id)
+        .map_err(ServiceError::bad_request)?;
+    Ok(command_payload(
+        &locked.id,
+        &snapshot,
+        locked.active,
+        latest,
+    ))
 }
 
-/// 写入文本
 pub async fn write_text(
     session: Arc<Mutex<ShellSession>>,
     text: &str,
+    command_id: Option<&str>,
+    press_enter: bool,
 ) -> ServiceResult {
-    let mut s = session.lock().await;
-    let written = s.write_raw(text)
-        .map_err(|e| ServiceError::internal(e))?;
-    Ok(json!({"written": written}))
+    let mut locked = session.lock().await;
+    sync_command_state(&mut locked)?;
+
+    let current_id = locked
+        .current_command_id()
+        .ok_or_else(|| ServiceError::bad_request("当前 session 没有运行中的 command"))?
+        .to_string();
+    if let Some(expected_id) = command_id {
+        if expected_id != current_id {
+            return Err(ServiceError::bad_request(format!(
+                "当前运行中的 command 不是: {expected_id}"
+            )));
+        }
+    }
+
+    let payload = if press_enter {
+        format!("{text}\n")
+    } else {
+        text.to_string()
+    };
+    let written = locked.write_raw(&payload).map_err(ServiceError::internal)?;
+    sync_command_state(&mut locked)?;
+
+    let (snapshot, latest) = locked
+        .snapshot_command(Some(&current_id))
+        .map_err(ServiceError::bad_request)?;
+    let mut result = command_payload(&locked.id, &snapshot, locked.active, latest);
+    result["written"] = json!(written);
+    Ok(result)
 }
 
-/// 从输出中移除结束标记行
-fn remove_done_marker(output: &str, marker: &str) -> String {
-    output
-        .lines()
-        .filter(|line| !line.contains(marker))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-/// 等待会话完成 (active=false 或超时)
 pub async fn wait_session(
     session: Arc<Mutex<ShellSession>>,
+    command_id: Option<&str>,
     timeout_secs: u64,
 ) -> ServiceResult {
-    log::info!("[Shell] wait: timeout={}s", timeout_secs);
-    let timeout = Duration::from_secs(timeout_secs);
-    let poll_interval = Duration::from_millis(500);
-    let deadline = tokio::time::Instant::now() + timeout;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(timeout_secs);
+    let poll_interval = Duration::from_millis(POLL_INTERVAL_MS);
 
     loop {
-        {
-            let mut s = session.lock().await;
-            if !s.active {
-                return Ok(json!({
-                    "session_id": s.id,
-                    "active": false,
-                    "exit_code": s.try_exit_code(),
-                    "timed_out": false,
-                }));
+        let now = tokio::time::Instant::now();
+        let maybe_result = {
+            let mut locked = session.lock().await;
+            sync_command_state(&mut locked)?;
+            let target_id = command_id
+                .map(|value| value.to_string())
+                .or_else(|| locked.current_command_id().map(|value| value.to_string()));
+            let (snapshot, latest) = locked
+                .snapshot_command(target_id.as_deref())
+                .map_err(ServiceError::bad_request)?;
+
+            if snapshot.command_done {
+                Some(command_payload(
+                    &locked.id,
+                    &snapshot,
+                    locked.active,
+                    latest,
+                ))
+            } else if now >= deadline {
+                let timeout_snapshot = if locked.current_command_id() == target_id.as_deref() {
+                    locked
+                        .mark_current_timed_out(snapshot.output.clone())
+                        .map_err(ServiceError::internal)?
+                } else {
+                    snapshot
+                };
+                Some(command_payload(
+                    &locked.id,
+                    &timeout_snapshot,
+                    locked.active,
+                    latest,
+                ))
+            } else {
+                None
             }
-        }
+        };
 
-        if tokio::time::Instant::now() >= deadline {
-            let mut s = session.lock().await;
-            return Ok(json!({
-                "session_id": s.id,
-                "active": s.active,
-                "exit_code": s.try_exit_code(),
-                "timed_out": true,
-            }));
+        if let Some(result) = maybe_result {
+            return Ok(result);
         }
-
         tokio::time::sleep(poll_interval).await;
     }
+}
+
+pub fn command_payload(
+    session_id: &str,
+    command: &ShellCommandState,
+    session_alive: bool,
+    latest: bool,
+) -> Value {
+    json!({
+        "session_id": session_id,
+        "command_id": command.id,
+        "status": command.status,
+        "command_done": command.command_done,
+        "timed_out": command.timed_out,
+        "session_alive": session_alive,
+        "active": session_alive,
+        "latest": latest,
+        "exit_code": command.exit_code,
+        "output": command.output,
+    })
+}
+
+fn parse_marker_exit_code(raw_output: &str, marker: &str) -> Option<i32> {
+    let prefix = format!("{marker}:");
+    normalize_output(raw_output).lines().find_map(|line| {
+        let trimmed = line.trim();
+        trimmed
+            .strip_prefix(&prefix)
+            .and_then(|code| code.trim().parse::<i32>().ok())
+    })
+}
+
+fn sanitize_command_output(raw_output: &str, command: &str, marker: &str) -> String {
+    let wrapper_line = command_wrapper_line(marker);
+    let normalized = normalize_output(raw_output);
+    let mut filtered = Vec::new();
+    for line in normalized.lines() {
+        let trimmed = line.trim();
+        if trimmed.contains(marker) {
+            continue;
+        }
+        if trimmed == wrapper_line {
+            continue;
+        }
+        filtered.push(line);
+    }
+    clean_pty_output(&filtered.join("\n"), command)
+}
+
+fn normalize_output(raw_output: &str) -> String {
+    raw_output.replace('\r', "")
+}
+
+fn command_wrapper_line(marker: &str) -> String {
+    format!("printf '\\n{}:%s\\n' \"$?\"", marker)
 }

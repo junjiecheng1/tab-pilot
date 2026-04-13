@@ -6,17 +6,17 @@
 
 // ── 模块声明 ──────────────────────────────
 #[allow(dead_code)]
-mod core;          // 基础配置 + 错误类型
-mod services;      // 业务服务层
-mod models;        // 数据模型
+mod core; // 基础配置 + 错误类型
 #[allow(dead_code)]
-mod engine;        // CDP 浏览器引擎
-mod router;        // WS 通信 + 消息分发
-mod infra;         // 审计/门控/存储/运行时
-mod ui;            // Tauri Commands + 认证 + Deep Link
+mod engine; // CDP 浏览器引擎
+mod infra; // 审计/门控/存储/运行时
+mod models; // 数据模型
+mod router; // WS 通信 + 消息分发
+mod services; // 业务服务层
+#[allow(dead_code)]
+mod toolkit;
 mod tray;
-#[allow(dead_code)]
-mod toolkit;       // 工具箱 (从 Aily SO 移植)
+mod ui; // Tauri Commands + 认证 + Deep Link // 工具箱 (从 Aily SO 移植)
 
 use tauri::{Listener, Manager};
 
@@ -36,17 +36,17 @@ fn main() {
         .setup(|app| {
             // 获取数据目录 (dev/prod 隔离)
             #[allow(unused_mut)]
-            let mut data_dir = app.path().app_data_dir()
-                .unwrap_or_else(|_| {
-                    dirs::data_dir()
-                        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
-                        .join("tabpilot")
-                });
+            let mut data_dir = app.path().app_data_dir().unwrap_or_else(|_| {
+                dirs::data_dir()
+                    .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
+                    .join("tabpilot")
+            });
 
             // debug 模式: 追加 -dev 避免和生产数据互相干扰
             #[cfg(debug_assertions)]
             {
-                let dir_name = data_dir.file_name()
+                let dir_name = data_dir
+                    .file_name()
                     .map(|n| format!("{}-dev", n.to_string_lossy()))
                     .unwrap_or_else(|| "tabpilot-dev".to_string());
                 data_dir.set_file_name(dir_name);
@@ -112,7 +112,11 @@ fn main() {
         .run(|app, event| {
             // macOS: 点击 Dock 图标时重新显示窗口
             #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Reopen { has_visible_windows, .. } = event {
+            if let tauri::RunEvent::Reopen {
+                has_visible_windows,
+                ..
+            } = event
+            {
                 if !has_visible_windows {
                     if let Some(window) = app.get_webview_window("main") {
                         let _ = window.show();

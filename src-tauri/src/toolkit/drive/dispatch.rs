@@ -3,9 +3,9 @@
 // Agent: bash("tab-drive upload --files '[\"report.pdf\"]' --parent-node token")
 // 底层复用 base::file_ops
 
-use serde_json::{json, Value};
 use crate::core::error::{ServiceError, ServiceResult};
 use crate::toolkit::client::TabClient;
+use serde_json::{json, Value};
 
 pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
     let subcmd = args.first().map(|s| s.as_str()).unwrap_or("help");
@@ -16,11 +16,13 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             let files_str = named_arg(args, "--files")?;
             let files: Vec<String> = serde_json::from_str(&files_str)
                 .map_err(|e| ServiceError::bad_request(format!("--files JSON 解析失败: {e}")))?;
-            let parent_type = named_arg(args, "--parent-type").unwrap_or_else(|_| "explorer".to_string());
+            let parent_type =
+                named_arg(args, "--parent-type").unwrap_or_else(|_| "explorer".to_string());
             let parent_node = named_arg(args, "--parent-node")?;
 
             let result = super::upload_files(client, &files, &parent_type, &parent_node)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "download" => {
@@ -31,14 +33,17 @@ pub async fn dispatch(args: &[String], client: &TabClient) -> ServiceResult {
             let dir = named_arg(args, "--output").unwrap_or_else(|_| "./downloads".to_string());
 
             let result = super::download_files(client, &tokens, &dir)
-                .await.map_err(|e| ServiceError::internal(format!("{e}")))?;
+                .await
+                .map_err(|e| ServiceError::internal(format!("{e}")))?;
             wrap(result)
         }
         "help" | "--help" | "-h" => Ok(json!({
             "output": HELP,
             "exit_code": 0,
         })),
-        _ => Err(ServiceError::bad_request(format!("tab-drive: 未知命令 '{subcmd}'"))),
+        _ => Err(ServiceError::bad_request(format!(
+            "tab-drive: 未知命令 '{subcmd}'"
+        ))),
     }
 }
 
