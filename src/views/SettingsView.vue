@@ -390,6 +390,14 @@ async function login() {
   } catch {
     window.open(authUrl, '_blank');
   }
+
+  // 启动后台轮询: TabPilot 主动从后端拉取 token (兜底 Deep Link 失败)
+  if (challenge) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('start_auth_poll', { challenge });
+    } catch { /* non-Tauri env */ }
+  }
 }
 
 async function logout() {

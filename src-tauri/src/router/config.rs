@@ -66,12 +66,16 @@ impl PilotConfig {
         );
         let (ws_url, http_url) = Self::derive_urls(&host);
 
+        let workspace = env_or_default("PILOT_WORKSPACE", &default_workspace());
+        // 确保默认工作空间目录存在
+        let _ = std::fs::create_dir_all(&workspace);
+
         Self {
             server_host: host,
             ws_url,
             http_url,
             data_dir,
-            workspace: env_or_default("PILOT_WORKSPACE", &default_workspace()),
+            workspace,
             guard_mode: "standard".to_string(),
             shell_timeout: 30,
             shell_cmd: platform_shell_cmd(),

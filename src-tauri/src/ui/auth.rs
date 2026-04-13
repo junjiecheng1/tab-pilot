@@ -186,12 +186,13 @@ impl AuthManager {
 /// 独立函数: 轮询后端 auth-poll 获取 token
 ///
 /// 每 3 秒轮询一次, 最多 5 分钟
-/// 拿到 token → save_token + wake connector + confirm challenge
+/// 拿到 token → save_token + wake connector + confirm challenge + 通知前端
 pub async fn poll_for_token(
     challenge: String,
     api_base: String,
     auth: std::sync::Arc<tokio::sync::RwLock<AuthManager>>,
     connector: std::sync::Arc<crate::router::connector::Connector>,
+    app_handle: Option<tauri::AppHandle>,
 ) {
     let client = reqwest::Client::new();
     let poll_url = format!("{}/api/pilot/auth-poll?challenge={}", api_base, challenge);
@@ -212,7 +213,7 @@ pub async fn poll_for_token(
         match client.get(&poll_url).send().await {
             Ok(resp) => {
                 if let Ok(body) = resp.json::<serde_json::Value>().await {
-                    if let Some(token) = body["token"].as_str() {
+                    if let Some(token) = body["data"]["token"].as_str() {
                         if !token.is_empty() {
                             log::info!("[AuthPoll] 轮询到 token (attempt {})", attempt + 1);
                             auth.write().await.save_token(token.to_string());
@@ -226,6 +227,11 @@ pub async fn poll_for_token(
                                 .send()
                                 .await;
 
+                            // 通知前端刷新状态 (与 deeplink 行为一致)
+                            if let Some(ref handle) = app_handle {
+                                use tauri::Emitter;
+                                let _ = handle.emit("pilot-auth-success", &token);
+                            }
                             log::info!("[AuthPoll] 授权完成");
                             return;
                         }

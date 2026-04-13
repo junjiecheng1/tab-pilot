@@ -133,6 +133,7 @@ pub async fn get_auth_challenge(state: State<'_, AppState>) -> Result<String, St
 /// 启动 auth-poll 轮询 (后台任务)
 #[tauri::command]
 pub async fn start_auth_poll(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     challenge: String,
 ) -> Result<String, String> {
@@ -141,7 +142,7 @@ pub async fn start_auth_poll(
     let connector = state.connector.clone();
 
     tokio::spawn(crate::ui::auth::poll_for_token(
-        challenge, api_base, auth, connector,
+        challenge, api_base, auth, connector, Some(app),
     ));
 
     Ok("轮询已启动".to_string())
