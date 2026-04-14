@@ -1,15 +1,8 @@
-use std::env::consts;
+// 工具注册表
 
-/// 平台标识 (对应 OSS 目录名)
+/// 平台标识 (对应 OSS 目录名) — 委托给 platform 模块
 pub fn platform_key() -> Result<&'static str, String> {
-    match (consts::OS, consts::ARCH) {
-        ("macos", "aarch64") => Ok("darwin-arm64"),
-        ("macos", "x86_64") => Ok("darwin-x64"),
-        ("linux", "x86_64") => Ok("linux-x64"),
-        ("linux", "aarch64") => Ok("linux-arm64"),
-        ("windows", "x86_64") => Ok("win-x64"),
-        (os, arch) => Err(format!("不支持的平台: {os}-{arch}")),
-    }
+    crate::infra::platform::platform_key()
 }
 
 /// 工具类型

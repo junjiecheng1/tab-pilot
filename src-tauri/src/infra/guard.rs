@@ -78,20 +78,14 @@ pub struct ToolGuard {
 }
 
 impl ToolGuard {
-    pub fn new(mode: &str, data_dir: &PathBuf, os_name: &str) -> Self {
+    pub fn new(mode: &str, data_dir: &PathBuf, _os_name: &str) -> Self {
         let blacklist = BLACKLIST_PATTERNS
             .iter()
             .filter_map(|p| Regex::new(p).ok())
             .collect();
 
-        let raw_paths: &[&str] = match os_name {
-            "darwin" => &["/etc", "/System", "/Library"],
-            "windows" => &["C:\\Windows", "C:\\Program Files"],
-            _ => &["/etc", "/root", "/boot"],
-        };
-
+        let mut protected = crate::infra::platform::protected_system_paths();
         let home = dirs::home_dir().unwrap_or_default();
-        let mut protected: Vec<String> = raw_paths.iter().map(|p| p.to_string()).collect();
         protected.push(format!("{}/.ssh", home.display()));
         protected.push(format!("{}/.gnupg", home.display()));
 

@@ -26,11 +26,16 @@ fn resolve_version(version: Option<&str>) -> String {
 
 /// 查找 node 二进制
 fn find_node_binary(version: &str) -> String {
-    let version_path = format!("/usr/local/bin/{version}");
-    if std::path::Path::new(&version_path).exists() {
-        return version_path;
+    // 尝试版本化路径 (容器环境: /usr/local/bin/node22 等)
+    for dir in crate::infra::platform::nodejs_runtime_search_paths() {
+        let candidate = dir.parent()
+            .unwrap_or(dir.as_path())
+            .join(version);
+        if candidate.exists() {
+            return candidate.to_string_lossy().to_string();
+        }
     }
-    // Fallback
+    // Fallback: PATH 中搜索
     if let Ok(p) = which::which("node") {
         return p.to_string_lossy().to_string();
     }
@@ -44,10 +49,8 @@ pub struct NodeJsService {
 
 impl NodeJsService {
     pub fn new() -> Self {
-        // 查找 runtime 目录
-        let runtime_dir = ["/opt/runtime/nodejs"]
-            .iter()
-            .map(PathBuf::from)
+        let runtime_dir = crate::infra::platform::nodejs_runtime_search_paths()
+            .into_iter()
             .find(|p| p.exists());
 
         Self { runtime_dir }
@@ -68,7 +71,11 @@ impl NodeJsService {
         // 创建临时目录
         let tmp_dir = tempfile::tempdir()
             .map_err(|e| ServiceError::internal(format!("创建临时目录失败: {e}")))?;
-        let work_dir = cwd.unwrap_or(tmp_dir.path().to_str().unwrap_or("/tmp"));
+        let tmp_fallback = crate::infra::platform::temp_dir();
+        let tmp_fallback_str = tmp_fallback.to_string_lossy();
+        let work_dir = cwd.unwrap_or_else(|| {
+            tmp_dir.path().to_str().unwrap_or(&tmp_fallback_str)
+        });
 
         // 链接 node_modules
         if let Some(ref rt) = self.runtime_dir {
@@ -110,7 +117,7 @@ impl NodeJsService {
                 if existing.is_empty() {
                     nm
                 } else {
-                    format!("{nm}:{existing}")
+                    format!("{nm}{}{existing}", crate::infra::platform::PATH_SEP)
                 },
             );
         }

@@ -58,11 +58,7 @@ impl ToolsManager {
         for (name, kind, _) in tool_list() {
             let exists = match kind {
                 ToolKind::Binary | ToolKind::TarGzDirect => {
-                    let bin_name = if cfg!(windows) {
-                        format!("{name}.exe")
-                    } else {
-                        name.to_string()
-                    };
+                    let bin_name = crate::infra::platform::bin_name(name);
                     self.tools_dir.join(&bin_name).exists()
                 }
                 ToolKind::Archive => {
@@ -91,21 +87,13 @@ impl ToolsManager {
 
             let (entry_bin, url, dest_dir, is_archive) = match kind {
                 ToolKind::Binary => {
-                    let bin_name = if cfg!(windows) {
-                        format!("{name}.exe")
-                    } else {
-                        name.to_string()
-                    };
+                    let bin_name = crate::infra::platform::bin_name(name);
                     let bin_path = self.tools_dir.join(&bin_name);
                     let url = format!("{}/{platform}/{bin_name}", prefix);
                     (bin_path.clone(), url, bin_path, false)
                 }
                 ToolKind::TarGzDirect => {
-                    let bin_name = if cfg!(windows) {
-                        format!("{name}.exe")
-                    } else {
-                        name.to_string()
-                    };
+                    let bin_name = crate::infra::platform::bin_name(name);
                     let bin_path = self.tools_dir.join(&bin_name);
                     let url = format!("{}/{platform}/{name}.tar.gz", prefix);
                     (bin_path, url, self.tools_dir.clone(), true)
@@ -177,11 +165,7 @@ impl ToolsManager {
     }
 
     fn archive_entry_candidate(&self, dest_dir: &Path, name: &str) -> PathBuf {
-        if cfg!(windows) {
-            dest_dir.join(format!("{name}.exe"))
-        } else {
-            dest_dir.join(name)
-        }
+        dest_dir.join(crate::infra::platform::bin_name(name))
     }
 
     fn find_archive_entry(&self, name: &str) -> Option<PathBuf> {

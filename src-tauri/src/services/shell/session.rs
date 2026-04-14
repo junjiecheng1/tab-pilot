@@ -78,9 +78,9 @@ impl ShellSession {
             .map_err(|e| format!("PTY 创建失败: {e}"))?;
 
         let mut cmd = portable_pty::CommandBuilder::new(&shell_cmd);
-        // -i (interactive) 仅对 bash/zsh 有意义，Windows cmd.exe 不支持
-        if !cfg!(target_os = "windows") {
-            cmd.arg("-i");
+        // 交互模式参数: Unix 加 -i，Windows 不加
+        for arg in crate::infra::platform::shell_interactive_args() {
+            cmd.arg(arg);
         }
         cmd.cwd(cwd);
 
@@ -92,18 +92,21 @@ impl ShellSession {
         cmd.env("SESSION_ID", session_id);
         cmd.env("TERM", "xterm-256color");
 
+        // PATH 注入: tools 目录中的 CLI 工具
         let tools_mgr = ToolsManager::default();
         let tools_dir = tools_mgr.tools_dir().to_path_buf();
         if tools_dir.exists() {
-            let system_path = std::env::var("PATH").unwrap_or_default();
-            let sep = if cfg!(windows) { ";" } else { ":" };
-            let mut path_parts = tools_mgr
-                .path_dirs()
-                .into_iter()
-                .map(|dir| dir.display().to_string())
-                .collect::<Vec<_>>();
-            path_parts.push(system_path);
-            cmd.env("PATH", path_parts.join(sep));
+            let dir_strs: Vec<String> = if crate::infra::platform::should_include_archive_tool_paths() {
+                // 注入所有 path_dirs (tools 根 + archive 子目录)
+                tools_mgr.path_dirs().into_iter().map(|d| d.display().to_string()).collect()
+            } else {
+                // 只注入 tools 根目录 (跳过含 DLL 的 archive 子目录)
+                log::info!("[Shell] PATH 注入: {} (跳过 archive 子目录)", tools_dir.display());
+                vec![tools_dir.display().to_string()]
+            };
+            let refs: Vec<&str> = dir_strs.iter().map(|s| s.as_str()).collect();
+            let new_path = crate::infra::platform::prepend_path(&refs);
+            cmd.env("PATH", new_path);
         }
 
         let child = pair

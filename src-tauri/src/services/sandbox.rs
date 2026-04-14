@@ -15,9 +15,7 @@ pub struct SandboxService {
 impl SandboxService {
     pub fn new() -> Self {
         Self {
-            workspace: std::env::var("WORKSPACE")
-                .or_else(|_| std::env::var("HOME"))
-                .unwrap_or_else(|_| "/tmp".to_string()),
+            workspace: crate::infra::platform::shell_default_cwd(),
         }
     }
 

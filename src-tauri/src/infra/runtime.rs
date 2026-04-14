@@ -86,20 +86,12 @@ impl RuntimeManager {
 
     /// Node 可执行文件路径
     pub fn node_bin(&self) -> PathBuf {
-        if cfg!(windows) {
-            self.runtime_dir.join("node").join("node.exe")
-        } else {
-            self.runtime_dir.join("node").join("bin").join("node")
-        }
+        self.runtime_dir.join("node").join(crate::infra::platform::node_bin_relative())
     }
 
     /// npx 可执行文件路径
     pub fn npx_bin(&self) -> PathBuf {
-        if cfg!(windows) {
-            self.runtime_dir.join("node").join("npx.cmd")
-        } else {
-            self.runtime_dir.join("node").join("bin").join("npx")
-        }
+        self.runtime_dir.join("node").join(crate::infra::platform::npx_bin_relative())
     }
 
     /// 脚本目录
@@ -200,11 +192,9 @@ impl RuntimeManager {
         let node_dir = self.runtime_dir.join("node");
         std::fs::create_dir_all(&node_dir).map_err(|e| RuntimeError::IoError(e.to_string()))?;
 
-        if cfg!(windows) {
-            // Windows: zip 解压
+        if crate::infra::platform::node_archive_ext() == "zip" {
             self.extract_zip(&archive_path, &node_dir).await?;
         } else {
-            // macOS / Linux: tar.gz 解压
             self.extract_tar_gz(&archive_path, &node_dir).await?;
         }
 
@@ -290,19 +280,15 @@ impl RuntimeManager {
     async fn install_packages(&self) -> Result<(), RuntimeError> {
         log::info!("[Runtime] 安装 playwright-core...");
 
-        let npm = if cfg!(windows) {
-            self.runtime_dir.join("node").join("npm.cmd")
-        } else {
-            self.runtime_dir.join("node").join("bin").join("npm")
-        };
+        let npm = self.runtime_dir.join("node").join(crate::infra::platform::npm_bin_relative());
 
         let node_bin_dir = self
             .node_bin()
             .parent()
             .unwrap_or(Path::new(""))
             .to_path_buf();
-        let system_path = std::env::var("PATH").unwrap_or_default();
-        let full_path = format!("{}:{}", node_bin_dir.display(), system_path);
+        let node_str = node_bin_dir.display().to_string();
+        let full_path = crate::infra::platform::prepend_path(&[&node_str]);
 
         let status = Command::new(&npm)
             .args([
@@ -339,8 +325,8 @@ impl RuntimeManager {
             .parent()
             .unwrap_or(Path::new(""))
             .to_path_buf();
-        let system_path = std::env::var("PATH").unwrap_or_default();
-        let full_path = format!("{}:{}", node_bin_dir.display(), system_path);
+        let node_str2 = node_bin_dir.display().to_string();
+        let full_path = crate::infra::platform::prepend_path(&[&node_str2]);
 
         let status = Command::new(&npx)
             .args(["playwright-core", "install", "chromium"])
@@ -397,7 +383,7 @@ fn node_download_url() -> Result<(String, &'static str), RuntimeError> {
         }
     };
 
-    let ext = if cfg!(windows) { "zip" } else { "tar.gz" };
+    let ext = crate::infra::platform::node_archive_ext();
 
     // npmmirror 加速中国下载
     let url = format!(

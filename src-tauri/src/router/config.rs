@@ -78,10 +78,10 @@ impl PilotConfig {
             workspace,
             guard_mode: "standard".to_string(),
             shell_timeout: 30,
-            shell_cmd: platform_shell_cmd(),
+            shell_cmd: crate::infra::platform::shell_exec_prefix(),
             output_max_size: 50 * 1024,
             file_max_read_size: 100 * 1024,
-            os_name: platform_os().to_string(),
+            os_name: crate::infra::platform::OS_NAME.to_string(),
             debug: env_bool("PILOT_DEBUG"),
             tools_oss_url: env_or_default(
                 "TOOLS_OSS_URL",
@@ -107,7 +107,7 @@ impl PilotConfig {
         } else {
             "x86_64"
         };
-        let os = platform_os_display();
+        let os = crate::infra::platform::OS_DISPLAY;
         format!("1.0.0 ({os}_{arch})")
     }
 
@@ -149,40 +149,5 @@ fn env_bool(key: &str) -> bool {
 
 /// 默认工作目录
 fn default_workspace() -> String {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("tabspace")
-        .to_string_lossy()
-        .to_string()
-}
-
-/// 平台标识 (内部用)
-fn platform_os() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "darwin"
-    } else if cfg!(target_os = "windows") {
-        "windows"
-    } else {
-        "linux"
-    }
-}
-
-/// 平台显示名
-fn platform_os_display() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "Darwin"
-    } else if cfg!(target_os = "windows") {
-        "Windows"
-    } else {
-        "Linux"
-    }
-}
-
-/// 平台 Shell 命令前缀
-fn platform_shell_cmd() -> Vec<String> {
-    if cfg!(target_os = "windows") {
-        vec!["cmd".to_string(), "/C".to_string()]
-    } else {
-        vec!["/bin/bash".to_string(), "-c".to_string()]
-    }
+    crate::infra::platform::default_workspace()
 }

@@ -20,9 +20,7 @@ pub struct FileService {
 impl FileService {
     pub fn new() -> Self {
         let workspace = PathBuf::from(
-            std::env::var("WORKSPACE")
-                .or_else(|_| std::env::var("HOME"))
-                .unwrap_or_else(|_| "/tmp".to_string()),
+            crate::infra::platform::shell_default_cwd(),
         );
         Self { workspace }
     }

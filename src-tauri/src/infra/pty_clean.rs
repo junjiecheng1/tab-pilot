@@ -66,46 +66,18 @@ fn strip_ansi(input: &str) -> String {
 
 /// 判断是否为噪音行 (shell banner + prompt)
 fn is_noise_line(line: &str) -> bool {
-    // 空行
+    // 空行保留，靠尾部清理
     if line.is_empty() {
-        return false; // 空行保留，靠尾部清理
+        return false;
     }
 
-    // ── Shell banner / macOS 提示 ──────────────
-    if line.starts_with("The default interactive shell is now")
-        || line.starts_with("To update your account to use zsh")
-        || line.starts_with("For more details, please visit https://support.apple.com")
-    {
+    // Shell banner (平台相关)
+    if crate::infra::platform::is_shell_banner(line) {
         return true;
     }
 
-    // ── Windows cmd.exe banner ──────────────
-    if line.starts_with("Microsoft Windows")
-        || line.starts_with("(c) Microsoft Corporation")
-        || line.starts_with("(C) Microsoft Corporation")
-    {
-        return true;
-    }
-
-    // ── Shell prompt ──────────────────────────
-    // bash-3.2$ cmd | bash$ cmd
-    if line.starts_with("bash") && line.contains("$ ") {
-        return true;
-    }
-    // 纯 prompt
-    if line == "bash-3.2$" || line == "$" {
-        return true;
-    }
-    // zsh prompt
-    if line.ends_with('%') && line.len() < 80 {
-        return true;
-    }
-    // Windows cmd prompt: C:\Users\xxx> 或 D:\workspace>
-    if line.len() > 2
-        && line.as_bytes().get(1) == Some(&b':')
-        && line.as_bytes().get(2) == Some(&b'\\')
-        && line.ends_with('>')
-    {
+    // Shell prompt (平台相关)
+    if crate::infra::platform::is_shell_prompt(line) {
         return true;
     }
 
