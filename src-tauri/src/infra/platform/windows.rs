@@ -37,15 +37,20 @@ pub fn shell_exec_prefix() -> Vec<String> {
     vec!["cmd".into(), "/C".into()]
 }
 
-/// Shell 交互模式参数 (-i 仅对 bash/zsh 有意义)
+/// Shell 交互模式参数
 pub fn shell_interactive_args() -> Vec<String> {
-    // cmd.exe 不支持 -i
-    vec![]
+    // /V:ON 启用延迟变量展开 — 确保 !errorlevel! 在执行时展开
+    // 而非 cmd.exe 解析行时提前展开 (导致 marker 解析失败)
+    vec!["/V:ON".into()]
 }
 
 /// 命令完成标记: 追加到命令后面用于检测 exit code
+///
+/// 使用 !errorlevel! (延迟展开语法) 配合 /V:ON:
+///   %errorlevel% 在 cmd.exe 解析行时立即展开 — 拿到的是上一条命令之前的值
+///   !errorlevel! 在 cmd.exe 执行时延迟展开 — 拿到的是真实退出码
 pub fn marker_echo(marker: &str) -> String {
-    format!("echo {}:%errorlevel%", marker)
+    format!("echo {}:!errorlevel!", marker)
 }
 
 // ══════════════════════════════════════════
@@ -169,11 +174,20 @@ pub fn is_shell_banner(line: &str) -> bool {
 
 /// 是否为 Shell prompt 行
 pub fn is_shell_prompt(line: &str) -> bool {
-    // Windows cmd prompt: C:\Users\xxx> 或 D:\workspace>
-    line.len() > 2
+    // 标准 cmd prompt: C:\Users\xxx> 或 D:\workspace>
+    if line.len() > 2
         && line.as_bytes().get(1) == Some(&b':')
         && line.as_bytes().get(2) == Some(&b'\\')
         && line.ends_with('>')
+    {
+        return true;
+    }
+    // 带 /V:ON 的 cmd 有时会在 prompt 前追加额外空行或短形式
+    // 兼容 "更多" 提示 "More?" 等变体
+    if line.trim() == "More?" {
+        return true;
+    }
+    false
 }
 
 // ══════════════════════════════════════════

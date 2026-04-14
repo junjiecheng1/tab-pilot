@@ -84,32 +84,46 @@ impl ShellSession {
         }
         cmd.cwd(cwd);
 
+        // ── 关键: 继承父进程环境 ──
+        // portable_pty 的 CommandBuilder::new() 不自动继承父进程环境变量。
+        // 如果不显式注入，cmd.exe 将因缺少 SystemRoot/WINDIR/TEMP 等关键变量
+        // 在初始化阶段 crash (Windows 0xc0000142)。
+        for (key, value) in std::env::vars() {
+            cmd.env(key, value);
+        }
+
+        // 用户传入的额外环境变量 (覆盖同名)
         if let Some(env) = environment {
             for (k, v) in env {
                 cmd.env(k, v);
             }
         }
         cmd.env("SESSION_ID", session_id);
-        cmd.env("TERM", "xterm-256color");
-
-        // PATH 注入: tools 目录中的 CLI 工具
-        let tools_mgr = ToolsManager::default();
-        let tools_dir = tools_mgr.tools_dir().to_path_buf();
-        if tools_dir.exists() {
-            let dir_strs: Vec<String> = if crate::infra::platform::should_include_archive_tool_paths() {
-                // 注入所有 path_dirs (tools 根 + archive 子目录)
-                tools_mgr.path_dirs().into_iter().map(|d| d.display().to_string()).collect()
-            } else {
-                // 只注入 tools 根目录 (跳过含 DLL 的 archive 子目录)
-                log::info!("[Shell] PATH 注入: {} (跳过 archive 子目录)", tools_dir.display());
-                vec![tools_dir.display().to_string()]
-            };
-            let refs: Vec<&str> = dir_strs.iter().map(|s| s.as_str()).collect();
-            let new_path = crate::infra::platform::prepend_path(&refs);
-            cmd.env("PATH", new_path);
+        // TERM 仅在 Unix 设置 — cmd.exe 不是 xterm 兼容终端
+        if !cfg!(target_os = "windows") {
+            cmd.env("TERM", "xterm-256color");
         }
 
-        let child = pair
+        // PATH 注入: tools 目录中的 CLI 工具
+        // Windows 完全跳过 — PyInstaller 打包工具的 DLL 会与系统 DLL 冲突
+        // 导致 cmd.exe 0xc0000142 启动失败
+        if !cfg!(target_os = "windows") {
+            let tools_mgr = ToolsManager::default();
+            let tools_dir = tools_mgr.tools_dir().to_path_buf();
+            if tools_dir.exists() {
+                let dir_strs: Vec<String> = if crate::infra::platform::should_include_archive_tool_paths() {
+                    // 注入所有 path_dirs (tools 根 + archive 子目录)
+                    tools_mgr.path_dirs().into_iter().map(|d| d.display().to_string()).collect()
+                } else {
+                    vec![tools_dir.display().to_string()]
+                };
+                let refs: Vec<&str> = dir_strs.iter().map(|s| s.as_str()).collect();
+                let new_path = crate::infra::platform::prepend_path(&refs);
+                cmd.env("PATH", new_path);
+            }
+        }
+
+        let mut child = pair
             .slave
             .spawn_command(cmd)
             .map_err(|e| format!("进程启动失败: {e}"))?;
@@ -126,6 +140,31 @@ impl ShellSession {
 
         let collector = OutputCollector::new();
         collector.spawn_reader(reader, session_id.to_string());
+
+        // 等待短暂时间后检测子进程是否秒退 (Windows DLL 冲突 / 环境缺失)
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        match child.try_wait() {
+            Ok(Some(exit_status)) => {
+                let early_output = collector.take();
+                log::error!(
+                    "[Shell] cmd 进程秒退! exit={:?}, early_output={:?}",
+                    exit_status.exit_code(),
+                    &early_output[..early_output.len().min(500)],
+                );
+                return Err(format!(
+                    "Shell 进程启动后立即退出 (exit_code={:?})。\
+                     可能原因: PATH 中存在 DLL 冲突，或系统环境变量缺失 (SystemRoot/WINDIR)。\
+                     请检查 ~/.tabpilot/runtime/tools/ 目录。",
+                    exit_status.exit_code(),
+                ));
+            }
+            Ok(None) => {
+                // 子进程仍在运行，正常
+            }
+            Err(e) => {
+                log::warn!("[Shell] try_wait 检查失败 (非致命): {e}");
+            }
+        }
 
         log::info!("[Shell] 会话已创建: {}", session_id);
 
