@@ -1,6 +1,6 @@
 [package]
 name = "tabpilot"
-version = "0.5.4"
+version = "0.5.7"
 description = "TabPilot — AI Agent 的本地桥梁"
 authors = ["TabApp Team"]
 edition = "2021"
