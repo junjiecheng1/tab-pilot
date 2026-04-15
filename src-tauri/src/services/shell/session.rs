@@ -57,10 +57,11 @@ pub struct ShellSession {
     child: Box<dyn portable_pty::Child + Send>,
     /// 输出收集器
     pub collector: OutputCollector,
-    /// PTY master 句柄续命 — 防止 create() 返回后被 drop 导致 Windows ConPTY 释放
-    #[allow(dead_code)]
-    _master: Box<dyn portable_pty::MasterPty + Send>,
-    /// PTY slave 句柄续命 — Windows ConPTY 下 slave drop 会给 cmd.exe 发 stdin EOF
+    /// PTY slave 句柄续命 — Windows ConPTY 下 slave 提前 drop 会给子进程发 stdin EOF
+    ///
+    /// 注意: 不持有 master。master 的 writer/reader 已经被 take_writer/try_clone_reader
+    /// 取走, 内部 Arc 保活; 若外面再抱一份 master 会双持 HPCON 状态, 实测导致 ConPTY
+    /// 子进程挂起不输出 (v0.5.8 回归现象)。
     #[allow(dead_code)]
     _slave: Box<dyn portable_pty::SlavePty + Send>,
 }
@@ -194,7 +195,6 @@ impl ShellSession {
             writer,
             child,
             collector,
-            _master: pair.master,
             _slave: pair.slave,
         })
     }

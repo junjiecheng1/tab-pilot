@@ -8,6 +8,7 @@
 
 mod collector;
 mod exec;
+mod oneshot;
 mod session;
 
 use std::collections::HashMap;
@@ -199,8 +200,36 @@ impl ShellService {
                     return result;
                 }
 
-                let session = self.get_or_create_session(&params).await?;
-                exec::exec_in_session(session, &cmd, timeout).await
+                // 路由策略:
+                // - 显式传了 session_id → 交互式, 走 persistent PTY (有状态, 能 cd / 保留环境)
+                // - 未传 session_id → 一次性命令, 走 oneshot (一条命令一个进程, 等 exit)
+                //
+                // 见 services/shell/oneshot.rs 顶部注释了解设计理由。
+                let has_session = params["session_id"]
+                    .as_str()
+                    .map(|s| !s.is_empty())
+                    .unwrap_or(false);
+
+                if has_session {
+                    let session = self.get_or_create_session(&params).await?;
+                    exec::exec_in_session(session, &cmd, timeout).await
+                } else {
+                    let cwd_owned = params["exec_dir"]
+                        .as_str()
+                        .or_else(|| params["cwd"].as_str())
+                        .map(std::path::PathBuf::from);
+                    let env: Option<HashMap<String, String>> = params
+                        .get("env")
+                        .or_else(|| params.get("environment"))
+                        .and_then(|v| serde_json::from_value(v.clone()).ok());
+                    oneshot::exec_oneshot(
+                        &cmd,
+                        cwd_owned.as_deref(),
+                        env.as_ref(),
+                        timeout,
+                    )
+                    .await
+                }
             }
             "view" => {
                 let sid = req_str(&params, "session_id")?;

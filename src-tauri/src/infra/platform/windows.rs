@@ -37,6 +37,36 @@ pub fn shell_exec_prefix() -> Vec<String> {
     vec!["cmd".into(), "/C".into()]
 }
 
+/// Oneshot 执行规格: (program, args_prefix) —— 用户命令作为最后一个参数追加
+///
+/// Windows 优先 PowerShell:
+/// - 不走 PTY (ConPTY + cmd.exe 持久会话在生产环境极其不稳)
+/// - `-NoProfile` 跳过用户 profile, 避免启动延迟 / 环境污染
+/// - `-NonInteractive` 禁止弹出任何交互提示 (会直接报错而非挂起)
+/// - `[Console]::OutputEncoding = UTF8` 前缀: 避免中文 Windows 下 GBK 乱码
+///
+/// 参考 Claude Code 的 powershellProvider 实现
+pub fn oneshot_shell_spec() -> (String, Vec<String>) {
+    (
+        "powershell.exe".to_string(),
+        vec![
+            "-NoProfile".into(),
+            "-NonInteractive".into(),
+            "-Command".into(),
+        ],
+    )
+}
+
+/// Oneshot 命令包装: 注入 UTF-8 输出编码, 避免中文 Windows 乱码
+pub fn wrap_oneshot_command(user_cmd: &str) -> String {
+    format!(
+        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \
+         $OutputEncoding = [System.Text.Encoding]::UTF8; \
+         {}",
+        user_cmd
+    )
+}
+
 /// Shell 交互模式参数
 pub fn shell_interactive_args() -> Vec<String> {
     // /V:ON 启用延迟变量展开 — 确保 !errorlevel! 在执行时展开

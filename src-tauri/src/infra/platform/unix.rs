@@ -43,6 +43,21 @@ pub fn shell_exec_prefix() -> Vec<String> {
     vec!["/bin/bash".into(), "-c".into()]
 }
 
+/// Oneshot 执行规格: (program, args_prefix) —— 用户命令作为最后一个参数追加
+///
+/// Unix 用 bash -c, 不走 PTY
+pub fn oneshot_shell_spec() -> (String, Vec<String>) {
+    (
+        std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string()),
+        vec!["-c".into()],
+    )
+}
+
+/// Oneshot 命令包装: Unix 无需特殊处理
+pub fn wrap_oneshot_command(user_cmd: &str) -> String {
+    user_cmd.to_string()
+}
+
 /// Shell 交互模式参数
 pub fn shell_interactive_args() -> Vec<String> {
     vec!["-i".into()]
