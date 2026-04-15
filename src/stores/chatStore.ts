@@ -352,6 +352,14 @@ export const useChatStore = defineStore('chat', () => {
       onError: (p: TurnError) => {
         const t = turn();
         if (!t) return;
+        // Phase 5.3: 后端 409 SESSION_BUSY → /chat 已禁止 attach, 自动转 /chat/reconnect
+        if (p.code === '409' && /SESSION_BUSY|session.*busy|reconnect/i.test(p.message)) {
+          // 把当前 turn 当作"恢复占位", 不算 error
+          t.status = 'streaming';
+          // 触发 tryReconnect, 不阻塞
+          tryReconnect().catch((e) => console.warn('[chat] auto-reconnect after SESSION_BUSY failed', e));
+          return;
+        }
         t.error = p;
         t.status = 'error';
       },
@@ -487,6 +495,98 @@ export const useChatStore = defineStore('chat', () => {
     );
   }
 
+  // ── 通信数据恢复映射 ──
+  function restoreToTurns(messages: any[]): ChatTurn[] {
+    const result: ChatTurn[] = [];
+    let currentTurn: ChatTurn | null = null;
+  
+    for (const msg of messages) {
+      if (msg.role === 'user') {
+        const textContent = msg.contents?.find((c: any) => c.type === 'text');
+        const text = typeof textContent?.data === 'string' 
+          ? textContent.data 
+          : textContent?.data?.markdown || '';
+        currentTurn = emptyTurn(text);
+        currentTurn.status = 'done'; // 从历史恢复的必定是已完成状态
+        result.push(currentTurn);
+      } else if (msg.role === 'assistant') {
+        if (!currentTurn) {
+          currentTurn = emptyTurn('');
+          currentTurn.status = 'done';
+          result.push(currentTurn);
+        }
+        
+        const errorData = msg.contents?.find((c: any) => c.type === 'error')?.data;
+        if (errorData?.message) {
+           currentTurn.status = 'error';
+           currentTurn.error = { code: 'HISTORY', message: errorData.message };
+        }
+  
+        const stepsData = msg.contents?.find((c: any) => c.type === 'steps')?.data;
+        if (Array.isArray(stepsData)) {
+           for (const s of stepsData) {
+              if (s.type === 'tool_activity') {
+                currentTurn.steps.push({
+                   id: String(s.id || genId()),
+                   type: 'tool',
+                   callId: String(s.id || genId()),
+                   name: s.name || 'tool',
+                   displayName: s.display_name,
+                   status: s.status === 'completed' ? 'done' : s.status === 'failed' ? 'error' : 'cancelled',
+                   summary: s.summary || s.result?.summary || s.result?.formatted || s.result?.display?.title || s.result?.data?.brief || '',
+                   args: s.args,
+                   errorMessage: s.error,
+                   durationMs: s.duration_ms,
+                   startedAt: Date.now(),
+                });
+              } else if (s.type === 'narration' || s.type === 'content') {
+                if (s.text) {
+                  currentTurn.steps.push({
+                     id: genId(),
+                     type: 'narration',
+                     text: s.text,
+                     startedAt: Date.now(),
+                  });
+                }
+              } else if (s.type === 'subagent') {
+                currentTurn.steps.push({
+                   id: s.task_id || s.name || genId(),
+                   type: 'subagent',
+                   taskId: s.task_id || s.name || genId(),
+                   name: s.name || 'subagent',
+                   displayName: s.display_name || s.name,
+                   description: s.description,
+                   // SubAgentStep.status 只允许 running/error/done; 历史里 executing 视为 done(已废弃)
+                   status: s.status === 'failed' ? 'error' : 'done',
+                   durationMs: s.duration_ms,
+                   errorMessage: s.error,
+                   steps: [], 
+                   startedAt: Date.now(),
+                });
+              } else if (s.type === 'block') {
+                 const b = s.block;
+                 if (b) {
+                   const blockType = b.block_type || b.type;
+                   const payload = b.data || b.payload;
+                   currentTurn.blocks.push({
+                     id: genId(),
+                     blockType,
+                     payload,
+                     dedupeKey: String(b.id || genId()),
+                   });
+                   if (blockType === 'message') {
+                       const md = payload?.markdown;
+                       if (md) currentTurn.content = md;
+                   }
+                 }
+              }
+           }
+        }
+      }
+    }
+    return result;
+  }
+
   async function tryReconnect() {
     if (!currentSessionId.value) return;
     if (isStreaming.value) return;
@@ -494,7 +594,18 @@ export const useChatStore = defineStore('chat', () => {
       httpBase.value,
       currentSessionId.value,
     );
-    if (!status.running) return;
+    if (!status.running) {
+      // 从后端读取全部历史消息并渲染
+      const res = await copilot.getMessages(httpBase.value, currentSessionId.value, 50);
+      if (res && res.messages && res.messages.length > 0) {
+        // 反序由于我们 fetch 返回的可能是最新的 N 条, 但是在渲染界面需要正序
+        // 这里按照 /messages API 通常是倒序或正序具体而定，这里先顺势映射
+        const historyTurns = restoreToTurns(res.messages.slice().reverse());
+        // 去重历史并与当前拼接或直接覆盖
+        turns.value = historyTurns;
+      }
+      return;
+    }
 
     // 若当前最新 turn 存在 → 重置其状态让 replay 从零重建；否则新建占位
     let t = currentTurn.value;
@@ -553,17 +664,13 @@ export const useChatStore = defineStore('chat', () => {
     answers: Array<{ question_id?: string; answer_value?: string; answer_values?: string[] }>,
     preview: string,
   ): Promise<{ ok: true } | { ok: false; error: string }> {
-    // Phase 3: 优先走新通用端点 /chat/tool-reply, 失败再退回旧 /human-ask/answer 作兼容
-    // 包装 answers 成 ToolReplyRequest.result 格式
-    const replyRes = await copilot.replyToolCall(
+    // Phase 3.9: 旧 /human-ask/answer 已删, 只走 /chat/tool-reply
+    const res = await copilot.replyToolCall(
       httpBase.value,
       toolCallId,
       { answers },
       currentTurnId.value,
     );
-    const res = replyRes.ok
-      ? { ok: true as const }
-      : await copilot.answerHumanAsk(httpBase.value, toolCallId, answers);
     if (!res.ok) {
       // 失败时弹 toast, 不标记 answered, 让用户可以重试
       lastError.value = `回答提交失败: ${res.error}`;

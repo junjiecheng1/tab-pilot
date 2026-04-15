@@ -172,41 +172,6 @@ export async function getTaskStatus(
   }
 }
 
-/** /copilot/human-ask/answer — 回答 Agent 的提问
- *
- * 返回 { ok: true } 成功, { ok: false, error } 失败。
- * 调用方负责 toast / 重试, 避免静默吞错。
- */
-export async function answerHumanAsk(
-  base: string,
-  toolCallId: string,
-  answers: Array<{ question_id?: string; answer_value?: string; answer_values?: string[] }>,
-): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
-  try {
-    const res = await fetch(`${base}/api/copilot/human-ask/answer`, {
-      method: 'POST',
-      headers: await authHeaders(),
-      body: JSON.stringify({ tool_call_id: toolCallId, answers }),
-    });
-    if (!res.ok) {
-      // 尽量解析出 pydantic validation 细节
-      let detail = `HTTP ${res.status}`;
-      try {
-        const body = await res.json();
-        if (body?.error?.message) detail = String(body.error.message);
-        else if (body?.detail) detail = JSON.stringify(body.detail);
-      } catch { /* ignore */ }
-      console.warn('[Copilot] answerHumanAsk failed', res.status, detail);
-      return { ok: false, status: res.status, error: detail };
-    }
-    return { ok: true };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.warn('[Copilot] answerHumanAsk network error', e);
-    return { ok: false, status: 0, error: msg };
-  }
-}
-
 /** /copilot/chat/inbox — 流式执行中追加一条新消息进队列, 后端会在合适时机吞入
  *
  * turnId 可选, 传了则后端会校验是否过期 (Phase 2)
@@ -365,5 +330,35 @@ export async function getSessions(
     }));
   } catch {
     return [];
+  }
+}
+
+/** 获取会话的历史消息 (用于切换会话或刷新后恢复视图) */
+export async function getMessages(
+  base: string,
+  sessionId: string,
+  limit = 50,
+  beforeId?: string,
+): Promise<any> {
+  try {
+    const qs = new URLSearchParams({ limit: String(limit) });
+    if (beforeId) qs.set('before_id', beforeId);
+
+    const res = await fetch(`${base}/api/copilot/sessions/${encodeURIComponent(sessionId)}/messages?${qs.toString()}`, {
+      headers: await authHeaders(),
+    });
+    if (!res.ok) {
+      let err = `HTTP ${res.status}`;
+      try {
+        const b = await res.json();
+        err = b?.error?.message || err;
+      } catch { /* ignore */ }
+      throw new Error(err);
+    }
+    const j = await res.json();
+    return j?.data || { session: {}, messages: [] };
+  } catch (e) {
+    console.warn('[Copilot] getMessages failed', e);
+    return { session: {}, messages: [] };
   }
 }
