@@ -94,6 +94,9 @@ async function startStream(
           if (evt.event_id && callbacks.onLastEventId) {
             callbacks.onLastEventId(evt.event_id);
           }
+          // Phase 4.4: 原始事件先给 chatStore (reducer 模式), 再走 dispatchEvent
+          // (后者保留作为 onError 409 SESSION_BUSY 等元数据回调来源)
+          callbacks.onAnyEvent?.(evt);
           dispatchEvent(evt, callbacks, state);
         },
         onDone: () => callbacks.onDone?.(),

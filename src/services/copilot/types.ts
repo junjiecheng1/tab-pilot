@@ -94,8 +94,15 @@ export interface SessionSummary {
   last_user_message?: string;
 }
 
+import type { WireEvent } from './sse-parser';
+
 /** SSE 回调协议 */
 export interface CopilotCallbacks {
+  /** Phase 4.4: 每个原始 wire event 都会触发, chatStore 用 reducer 派生 turn 状态;
+   *  其他 onToolStart / onContentDelta / onBlock 等结构化回调在 reducer 模式下不再使用,
+   *  仅保留作为兼容/调试用途 (仍由 events.ts dispatchEvent 触发) */
+  onAnyEvent?: (evt: WireEvent) => void;
+
   onSession?: (sessionId: string) => void;
   onNarration?: (text: string, scope?: ScopeRef) => void;
   onContentDelta?: (delta: string, full: string) => void;
