@@ -83,6 +83,8 @@ export const useChatStore = defineStore('chat', () => {
   /** 当前 session 最新的 turn_id (Phase 2), 由后端 SSE 发 turn_id 事件时更新,
    * 前端在 stop / inbox / tool-reply 请求里带上, 后端拒过期 turn 的请求 */
   const currentTurnId = ref<number>(0);
+  /** 最后一个收到的 SSE event_id (Phase 4.3), reconnect 时带上实现增量重放 */
+  const lastEventId = ref<string | null>(null);
 
   let abortCtrl: AbortController | null = null;
 
@@ -392,6 +394,10 @@ export const useChatStore = defineStore('chat', () => {
         }
       },
 
+      onLastEventId: (eventId: string) => {
+        lastEventId.value = eventId;
+      },
+
       onInboxConsumed: (msgId: string, message: string) => {
         // 1) 从前端排队队列里移除
         const i = pendingInbox.value.findIndex((m) => m.msgId === msgId);
@@ -496,21 +502,27 @@ export const useChatStore = defineStore('chat', () => {
       turns.value.push(emptyTurn('(恢复中的会话)'));
       t = currentTurn.value!;
     }
-    // 关键：清空 turn 的 steps/content/blocks/error，避免 replay 时
-    // content_delta 从 0 累积覆盖已有内容造成长→短→长的跳跃
-    t.steps.splice(0, t.steps.length);
-    t.content = '';
-    t.blocks.splice(0, t.blocks.length);
-    t.error = null;
+    // Phase 4.3: 有 lastEventId 时做增量重连 (后端从该事件后开始发),
+    // 前端不清空 turn, 避免闪烁
+    const hasIncremental = !!lastEventId.value;
+    if (!hasIncremental) {
+      // 关键：清空 turn 的 steps/content/blocks/error，避免 replay 时
+      // content_delta 从 0 累积覆盖已有内容造成长→短→长的跳跃
+      t.steps.splice(0, t.steps.length);
+      t.content = '';
+      t.blocks.splice(0, t.blocks.length);
+      t.error = null;
+      resetInflight();
+    }
     t.status = 'streaming';
-    resetInflight();
     isStreaming.value = true;
-    isReplaying.value = true;
+    isReplaying.value = !hasIncremental;
 
     abortCtrl = await copilot.reconnect(
       httpBase.value,
       currentSessionId.value,
       makeCallbacks(),
+      lastEventId.value,  // Phase 4.3: 带上 since_event_id
     );
   }
 

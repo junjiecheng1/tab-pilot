@@ -130,6 +130,8 @@ export interface CopilotCallbacks {
   onInboxConsumed?: (msgId: string, message: string) => void;
   /** 新 turn 开始时后端下发 turn_id, 前端记住用于 stop/inbox/tool-reply */
   onTurnId?: (turnId: number, sessionId: string) => void;
+  /** 每个带 event_id 的事件都会触发 (Phase 4.3), 前端存为 lastEventId 供 reconnect */
+  onLastEventId?: (eventId: string) => void;
   /** 后端标记 inbox 已清空 — 前端清空全部 pending */
   onInboxDrained?: () => void;
   /** SubAgent 生命周期 */

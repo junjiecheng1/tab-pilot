@@ -89,7 +89,13 @@ async function startStream(
         return;
       }
       await consumeSSE(res, {
-        onEvent: (evt: WireEvent) => dispatchEvent(evt, callbacks, state),
+        onEvent: (evt: WireEvent) => {
+          // Phase 4.1/4.3: 记录每个事件的 event_id, 供 reconnect 增量重放
+          if (evt.event_id && callbacks.onLastEventId) {
+            callbacks.onLastEventId(evt.event_id);
+          }
+          dispatchEvent(evt, callbacks, state);
+        },
         onDone: () => callbacks.onDone?.(),
         onParseError: (line, e) =>
           console.warn('[Copilot] SSE parse error', line, e),
@@ -130,16 +136,21 @@ export async function chat(
   return startStream(base, '/copilot/chat', body, callbacks);
 }
 
-/** /copilot/chat/reconnect — 断线后全量 replay + follow */
+/** /copilot/chat/reconnect — 断线后重连
+ *
+ * sinceEventId 传了 → 后端从该事件后开始发 (Phase 4.3 增量重放, 零闪烁)
+ * 不传 → 完整重放 (兼容旧客户端)
+ */
 export async function reconnect(
   base: string,
   sessionId: string,
   callbacks: CopilotCallbacks,
+  sinceEventId?: string | null,
 ): Promise<AbortController> {
   return startStream(
     base,
     '/copilot/chat/reconnect',
-    { session_id: sessionId },
+    buildReconnectPayload(sessionId, sinceEventId),
     callbacks,
   );
 }
@@ -257,6 +268,16 @@ export async function generateSessionTitle(
   }
 }
 
+/** /copilot/chat/reconnect 的 payload helper: 可选 since_event_id 做增量重放 */
+export function buildReconnectPayload(
+  sessionId: string,
+  sinceEventId?: string | null,
+): Record<string, unknown> {
+  const p: Record<string, unknown> = { session_id: sessionId };
+  if (sinceEventId) p.since_event_id = sinceEventId;
+  return p;
+}
+
 /** /copilot/chat/stop — 真正终止 Agent 执行 */
 export async function stopChat(
   base: string,
@@ -280,6 +301,8 @@ export async function stopChat(
  *
  * 替代 /copilot/human-ask/answer (后者保留作 alias)
  * 任何等待用户输入的 tool (ask / staged_confirm / 未来的 file_picker) 都走这里
+ *
+ * Phase 3.8: 网络错误指数退避重试 3 次 (0 / 1s / 3s), 4xx 不重试。
  */
 export async function replyToolCall(
   base: string,
@@ -287,27 +310,37 @@ export async function replyToolCall(
   result: Record<string, unknown>,
   turnId?: number,
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
-  try {
-    const body: Record<string, unknown> = { tool_call_id: toolCallId, result };
-    if (turnId && turnId > 0) body.turn_id = turnId;
-    const res = await fetch(`${base}/api/copilot/chat/tool-reply`, {
-      method: 'POST',
-      headers: await authHeaders(),
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      let detail = `HTTP ${res.status}`;
-      try {
-        const b = await res.json();
-        detail = b?.error?.message || detail;
-      } catch { /* ignore */ }
-      return { ok: false, status: res.status, error: detail };
+  const body: Record<string, unknown> = { tool_call_id: toolCallId, result };
+  if (turnId && turnId > 0) body.turn_id = turnId;
+  const delays = [0, 1000, 3000];
+  let lastErr: { status: number; error: string } | null = null;
+  for (const delay of delays) {
+    if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+    try {
+      const res = await fetch(`${base}/api/copilot/chat/tool-reply`, {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify(body),
+      });
+      if (res.ok) return { ok: true };
+      // 4xx 视为终态 (参数问题/turn 过期), 不重试
+      if (res.status >= 400 && res.status < 500) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const b = await res.json();
+          detail = b?.error?.message || detail;
+        } catch { /* ignore */ }
+        return { ok: false, status: res.status, error: detail };
+      }
+      lastErr = { status: res.status, error: `HTTP ${res.status}` };
+    } catch (e) {
+      lastErr = {
+        status: 0,
+        error: e instanceof Error ? e.message : String(e),
+      };
     }
-    return { ok: true };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, status: 0, error: msg };
   }
+  return { ok: false, ...(lastErr as { status: number; error: string }) };
 }
 
 /** /copilot/sessions — 获取最近对话（for ↑↓ 历史穿梭） */
