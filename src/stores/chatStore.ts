@@ -80,6 +80,9 @@ export const useChatStore = defineStore('chat', () => {
    *
    * 后端 SSE 会发 `inbox_consumed` 事件时, events.ts 应该把对应 msgId 从这里移除。 */
   const pendingInbox = ref<Array<{ msgId: string; text: string }>>([]);
+  /** 当前 session 最新的 turn_id (Phase 2), 由后端 SSE 发 turn_id 事件时更新,
+   * 前端在 stop / inbox / tool-reply 请求里带上, 后端拒过期 turn 的请求 */
+  const currentTurnId = ref<number>(0);
 
   let abortCtrl: AbortController | null = null;
 
@@ -382,6 +385,13 @@ export const useChatStore = defineStore('chat', () => {
         console.warn('[TabPilot] 未知 SSE 事件:', type, data);
       },
 
+      onTurnId: (turnId: number, sessionId: string) => {
+        currentTurnId.value = turnId;
+        if (sessionId && sessionId !== currentSessionId.value) {
+          currentSessionId.value = sessionId;
+        }
+      },
+
       onInboxConsumed: (msgId: string, message: string) => {
         // 1) 从前端排队队列里移除
         const i = pendingInbox.value.findIndex((m) => m.msgId === msgId);
@@ -429,6 +439,7 @@ export const useChatStore = defineStore('chat', () => {
         currentSessionId.value,
         trimmed,
         last.msgId,
+        currentTurnId.value,
       );
       if (!res.ok) {
         const i = pendingInbox.value.findIndex((m) => m.msgId === last.msgId);
@@ -505,7 +516,7 @@ export const useChatStore = defineStore('chat', () => {
 
   async function stop() {
     if (currentSessionId.value) {
-      await copilot.stopChat(httpBase.value, currentSessionId.value);
+      await copilot.stopChat(httpBase.value, currentSessionId.value, currentTurnId.value);
     }
     abortCtrl?.abort();
     abortCtrl = null;
@@ -530,7 +541,17 @@ export const useChatStore = defineStore('chat', () => {
     answers: Array<{ question_id?: string; answer_value?: string; answer_values?: string[] }>,
     preview: string,
   ): Promise<{ ok: true } | { ok: false; error: string }> {
-    const res = await copilot.answerHumanAsk(httpBase.value, toolCallId, answers);
+    // Phase 3: 优先走新通用端点 /chat/tool-reply, 失败再退回旧 /human-ask/answer 作兼容
+    // 包装 answers 成 ToolReplyRequest.result 格式
+    const replyRes = await copilot.replyToolCall(
+      httpBase.value,
+      toolCallId,
+      { answers },
+      currentTurnId.value,
+    );
+    const res = replyRes.ok
+      ? { ok: true as const }
+      : await copilot.answerHumanAsk(httpBase.value, toolCallId, answers);
     if (!res.ok) {
       // 失败时弹 toast, 不标记 answered, 让用户可以重试
       lastError.value = `回答提交失败: ${res.error}`;

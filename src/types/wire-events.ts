@@ -158,6 +158,18 @@ export interface InboxDrainedEvent extends WireEventBase<'inbox_drained'> {
 }
 
 // ═══════════════════════════════════════════════════════════
+// Turn 版本号 (Phase 2)
+// ═══════════════════════════════════════════════════════════
+
+/** 后端在每个新 /chat 开头发一次, 前端记下 turn_id, 用于后续 stop/inbox/tool-reply 请求 */
+export interface TurnIdEvent extends WireEventBase<'turn_id'> {
+  data: {
+    turn_id: number;
+    session_id: string;
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
 // SubAgent
 // ═══════════════════════════════════════════════════════════
 
@@ -233,6 +245,7 @@ export type WireEventTyped =
   | StagedConfirmationEvent
   | InboxConsumedEvent
   | InboxDrainedEvent
+  | TurnIdEvent
   | SubagentStartEvent
   | SubagentEndEvent
   | DiscardableEvent;
@@ -253,6 +266,7 @@ export const KNOWN_WIRE_EVENT_TYPES = [
   'staged_confirmation',
   'inbox_consumed',
   'inbox_drained',
+  'turn_id',
   'subagent_start',
   'subagent_end',
   // discardable

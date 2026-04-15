@@ -333,6 +333,13 @@ export function dispatchEvent(
     case 'plan_update':
     case 'schema_mapping':
     case 'follow_up':
+    case 'turn_id': {
+      // Phase 2.2: 后端在新 turn 开头发, 前端记下用于后续 stop/inbox/tool-reply
+      const turnId = Number(d.turn_id);
+      const sid = String(d.session_id ?? '');
+      if (turnId > 0) cb.onTurnId?.(turnId, sid);
+      return;
+    }
     case 'inbox_consumed': {
       // 后端消费了某条 pending 消息, 视为 turn 边界:
       // 1) 把当前 turn 封口

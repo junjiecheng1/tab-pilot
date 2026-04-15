@@ -198,6 +198,7 @@ export async function answerHumanAsk(
 
 /** /copilot/chat/inbox — 流式执行中追加一条新消息进队列, 后端会在合适时机吞入
  *
+ * turnId 可选, 传了则后端会校验是否过期 (Phase 2)
  * 返回 { ok: true, pending } 或 { ok: false, error }
  */
 export async function pushInbox(
@@ -205,12 +206,15 @@ export async function pushInbox(
   sessionId: string,
   message: string,
   msgId: string,
+  turnId?: number,
 ): Promise<{ ok: true; pending: number } | { ok: false; error: string }> {
   try {
+    const body: Record<string, unknown> = { session_id: sessionId, message, msg_id: msgId };
+    if (turnId && turnId > 0) body.turn_id = turnId;
     const res = await fetch(`${base}/api/copilot/chat/inbox`, {
       method: 'POST',
       headers: await authHeaders(),
-      body: JSON.stringify({ session_id: sessionId, message, msg_id: msgId }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       let err = `HTTP ${res.status}`;
@@ -254,15 +258,55 @@ export async function generateSessionTitle(
 }
 
 /** /copilot/chat/stop — 真正终止 Agent 执行 */
-export async function stopChat(base: string, sessionId: string): Promise<void> {
+export async function stopChat(
+  base: string,
+  sessionId: string,
+  turnId?: number,
+): Promise<void> {
   try {
+    const body: Record<string, unknown> = { session_id: sessionId };
+    if (turnId && turnId > 0) body.turn_id = turnId;
     await fetch(`${base}/api/copilot/chat/stop`, {
       method: 'POST',
       headers: await authHeaders(),
-      body: JSON.stringify({ session_id: sessionId }),
+      body: JSON.stringify(body),
     });
   } catch (e) {
     console.warn('[Copilot] stopChat failed', e);
+  }
+}
+
+/** /copilot/chat/tool-reply — 通用工具应答 (Phase 3)
+ *
+ * 替代 /copilot/human-ask/answer (后者保留作 alias)
+ * 任何等待用户输入的 tool (ask / staged_confirm / 未来的 file_picker) 都走这里
+ */
+export async function replyToolCall(
+  base: string,
+  toolCallId: string,
+  result: Record<string, unknown>,
+  turnId?: number,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  try {
+    const body: Record<string, unknown> = { tool_call_id: toolCallId, result };
+    if (turnId && turnId > 0) body.turn_id = turnId;
+    const res = await fetch(`${base}/api/copilot/chat/tool-reply`, {
+      method: 'POST',
+      headers: await authHeaders(),
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try {
+        const b = await res.json();
+        detail = b?.error?.message || detail;
+      } catch { /* ignore */ }
+      return { ok: false, status: res.status, error: detail };
+    }
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, status: 0, error: msg };
   }
 }
 
