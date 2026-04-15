@@ -214,17 +214,21 @@ impl ShellService {
                     let session = self.get_or_create_session(&params).await?;
                     exec::exec_in_session(session, &cmd, timeout).await
                 } else {
+                    // cwd 解析优先级: 显式 exec_dir > cwd > 平台默认 ($WORKSPACE / USERPROFILE / HOME)
+                    // 与 persistent 路径 (create_session) 保持一致, 避免泄漏 TabPilot 自身进程 cwd
                     let cwd_owned = params["exec_dir"]
                         .as_str()
                         .or_else(|| params["cwd"].as_str())
-                        .map(std::path::PathBuf::from);
+                        .map(String::from)
+                        .unwrap_or_else(crate::infra::platform::shell_default_cwd);
+                    let cwd_path = std::path::PathBuf::from(cwd_owned);
                     let env: Option<HashMap<String, String>> = params
                         .get("env")
                         .or_else(|| params.get("environment"))
                         .and_then(|v| serde_json::from_value(v.clone()).ok());
                     oneshot::exec_oneshot(
                         &cmd,
-                        cwd_owned.as_deref(),
+                        Some(cwd_path.as_path()),
                         env.as_ref(),
                         timeout,
                     )

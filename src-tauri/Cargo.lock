@@ -5949,7 +5949,7 @@ dependencies = [
 
 [[package]]
 name = "tabpilot"
-version = "0.5.9"
+version = "0.5.10"
 dependencies = [
  "ab_glyph",
  "aes-gcm",
