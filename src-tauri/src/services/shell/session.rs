@@ -57,6 +57,12 @@ pub struct ShellSession {
     child: Box<dyn portable_pty::Child + Send>,
     /// 输出收集器
     pub collector: OutputCollector,
+    /// PTY master 句柄续命 — 防止 create() 返回后被 drop 导致 Windows ConPTY 释放
+    #[allow(dead_code)]
+    _master: Box<dyn portable_pty::MasterPty + Send>,
+    /// PTY slave 句柄续命 — Windows ConPTY 下 slave drop 会给 cmd.exe 发 stdin EOF
+    #[allow(dead_code)]
+    _slave: Box<dyn portable_pty::SlavePty + Send>,
 }
 
 impl ShellSession {
@@ -141,20 +147,22 @@ impl ShellSession {
         let collector = OutputCollector::new();
         collector.spawn_reader(reader, session_id.to_string());
 
-        // 等待短暂时间后检测子进程是否秒退 (Windows DLL 冲突 / 环境缺失)
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        // 等待短暂时间后检测子进程是否秒退
+        // - Windows DLL 冲突 / 环境缺失 → 50ms 内退出
+        // - Windows ConPTY 句柄释放触发 stdin EOF → ~100ms 退出
+        // 阈值放到 250ms 以兜住 ConPTY 场景
+        std::thread::sleep(std::time::Duration::from_millis(250));
         match child.try_wait() {
             Ok(Some(exit_status)) => {
                 let early_output = collector.take();
                 log::error!(
-                    "[Shell] cmd 进程秒退! exit={:?}, early_output={:?}",
+                    "[Shell] cmd 进程启动后 <250ms 退出! exit={:?}, early_output={:?}",
                     exit_status.exit_code(),
                     &early_output[..early_output.len().min(500)],
                 );
                 return Err(format!(
                     "Shell 进程启动后立即退出 (exit_code={:?})。\
-                     可能原因: PATH 中存在 DLL 冲突，或系统环境变量缺失 (SystemRoot/WINDIR)。\
-                     请检查 ~/.tabpilot/runtime/tools/ 目录。",
+                     可能原因: ConPTY 句柄生命周期异常 / DLL 冲突 / 环境缺失 (SystemRoot/WINDIR)。",
                     exit_status.exit_code(),
                 ));
             }
@@ -166,7 +174,13 @@ impl ShellSession {
             }
         }
 
-        log::info!("[Shell] 会话已创建: {}", session_id);
+        log::info!(
+            "[Shell] 会话已创建: {} (shell={}, cwd={:?}, cwd_exists={})",
+            session_id,
+            shell_cmd,
+            cwd,
+            cwd.exists()
+        );
 
         Ok(Self {
             id: session_id.to_string(),
@@ -180,6 +194,8 @@ impl ShellSession {
             writer,
             child,
             collector,
+            _master: pair.master,
+            _slave: pair.slave,
         })
     }
 

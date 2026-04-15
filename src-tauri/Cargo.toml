@@ -1,6 +1,6 @@
 [package]
 name = "tabpilot"
-version = "0.5.7"
+version = "0.5.8"
 description = "TabPilot — AI Agent 的本地桥梁"
 authors = ["TabApp Team"]
 edition = "2021"
@@ -40,7 +40,7 @@ dirs = "6"
 uuid = { version = "1", features = ["v4"] }
 chrono = "0.4"
 hostname = "0.4"
-portable-pty = "0.8"
+portable-pty = "0.9"
 tempfile = "3"
 which = "7"
 

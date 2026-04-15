@@ -1,6 +1,6 @@
 {
   "productName": "TabPilot",
-  "version": "0.5.7",
+  "version": "0.5.8",
   "identifier": "com.tabapp.pilot",
   "build": {
     "frontendDist": "../dist",
@@ -13,12 +13,16 @@
     "windows": [
       {
         "title": "TabPilot",
-        "width": 800,
-        "height": 600,
-        "minWidth": 800,
-        "minHeight": 600,
+        "width": 720,
+        "height": 480,
+        "minWidth": 720,
+        "minHeight": 80,
         "resizable": true,
         "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "transparent": true,
+        "shadow": true,
         "visible": true,
         "fullscreen": false,
         "maximizable": false
