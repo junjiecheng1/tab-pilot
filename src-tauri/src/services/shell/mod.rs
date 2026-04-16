@@ -7,6 +7,7 @@
 //   collector.rs → 线程安全输出收集 + prompt 检测
 
 mod collector;
+mod env;
 mod exec;
 mod oneshot;
 mod session;

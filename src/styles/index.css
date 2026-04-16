@@ -1,95 +1,123 @@
-/* TabPilot 全局样式 — Premium 现代质感风格 */
+/* TabPilot 全局样式
+ * 基础 tokens 来自 copilot-tokens.css（对齐 PC Copilot 设计系统）
+ * 此文件做 bridge 层：旧 token 名（--bg-*/--text-*）→ 映射到新的 --c-* tokens
+ * 保留 TabPilot 品牌蓝作为 subtle accent（头像阴影 / focus ring 等），避免跟 PC
+ * 的黑色 accent 冲突
+ */
 
 :root {
-  /* 飞书 / 现代 SaaS 设计风格颜色 */
-  --bg-app: #f5f6f7;
-  --bg-sidebar: #ffffff;
-  --bg-card: #ffffff;
-  --bg-card-hover: #f9f9fa;
-  --bg-hover: rgba(31, 35, 41, 0.06);
-  --bg-active: rgba(51, 112, 255, 0.1); /* TabApp 主题蓝 */
-  --bg-input: #ebedf0;
+  /* ── Bridge：旧 token 映射到 PC 设计 token ── */
+  --bg-app: var(--c-bg-primary);
+  --bg-sidebar: var(--c-bg-secondary);
+  --bg-card: var(--c-bg-elevated);
+  --bg-card-hover: var(--c-bg-hover);
+  --bg-hover: var(--c-bg-hover);
+  --bg-active: var(--c-bg-active);
+  --bg-input: var(--c-bg-secondary);
   --bg-terminal: #1e1e24;
 
-  --border: rgba(31, 35, 41, 0.15);
-  --border-subtle: rgba(31, 35, 41, 0.08);
+  --border: var(--c-border);
+  --border-subtle: rgba(0, 0, 0, 0.04);
 
-  --text-primary: #12141a;
-  --text-secondary: #505661;
-  --text-tertiary: #757c87;
+  --text-primary: var(--c-text-primary);
+  --text-secondary: var(--c-text-secondary);
+  --text-tertiary: var(--c-text-tertiary);
 
-  --accent: #3370ff;       /* TabApp 核心蓝 */
-  --accent-hover: #1a56db;
-  --green: #23c343;
-  --green-dim: rgba(35, 195, 67, 0.1);
-  --red: #f53f3f;
-  --red-dim: rgba(245, 63, 63, 0.1);
-  --yellow: #f7ba1e;
-  --yellow-dim: rgba(247, 186, 30, 0.1);
-  --blue: #3370ff;
+  /* Accent: 跟 PC 走 — 主 accent 用黑色；蓝色仅作为 subtle accent（阴影/focus） */
+  --accent: var(--c-accent);
+  --accent-hover: var(--c-accent-hover);
 
-  /* 字体 — macOS 系统优先，再看 Inter */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "SF Mono", "Fira Code", "JetBrains Mono", Consolas, monospace;
+  --green: var(--c-success);
+  --green-dim: rgba(22, 163, 74, 0.1);
+  --red: var(--c-danger);
+  --red-dim: rgba(220, 38, 38, 0.1);
+  --yellow: var(--c-warning);
+  --yellow-dim: rgba(217, 119, 6, 0.1);
 
-  /* 极致圆角和过渡 */
-  --radius: 6px;
-  --radius-lg: 12px;
-  
-  /* 更含蓄的阴影结构 */
-  --shadow-sm: 0 1px 2px rgba(31, 35, 41, 0.04), 0 2px 4px rgba(31, 35, 41, 0.04);
-  --shadow-md: 0 4px 12px rgba(31, 35, 41, 0.06), 0 8px 16px rgba(31, 35, 41, 0.04);
+  /* 品牌蓝 — 仅用于头像阴影 / focus ring 等低调点缀 */
+  --brand-blue: #2563eb;
+  --brand-blue-shadow: rgba(37, 99, 235, 0.14);
+
+  /* Typography — 对齐 PC（SF Pro + PingFang SC） */
+  --font-sans: var(--font-sans, -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif);
+  --font-mono: var(--font-mono, "SF Mono", "Fira Code", "Cascadia Code", "Menlo", monospace);
+
+  --radius: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+
+  --shadow-sm: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.04));
+  --shadow-md: var(--shadow-md, 0 2px 8px rgba(0, 0, 0, 0.06));
 }
 
-/* 适配暗色模式，自动跟随系统 或手动切换 */
+html, body, #app {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: var(--text-primary);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ── Dark mode：覆盖 --c-* tokens（PC 无 dark，我们自己补一套反色） ── */
 html.dark,
 html[data-theme='dark'] {
-  --bg-app: #121212;
-  --bg-sidebar: #1f1f1f;
-  --bg-card: #1f1f1f;
-  --bg-card-hover: #262626;
-  --bg-hover: rgba(255, 255, 255, 0.08);
-  --bg-active: rgba(51, 112, 255, 0.15);
-  --bg-input: #2b2b2b;
-  --bg-terminal: #0a0a0c;
+  --c-text-primary: #f1f5f9;
+  --c-text-secondary: #cbd5e1;
+  --c-text-tertiary: #94a3b8;
+  --c-text-disabled: #64748b;
+  --c-text-inverse: #0d0d0d;
 
-  --border: rgba(255, 255, 255, 0.1);
-  --border-subtle: rgba(255, 255, 255, 0.05);
+  --c-bg-primary: #0f172a;
+  --c-bg-secondary: #1e293b;
+  --c-bg-tertiary: #334155;
+  --c-bg-hover: rgba(255, 255, 255, 0.06);
+  --c-bg-active: rgba(255, 255, 255, 0.1);
+  --c-bg-elevated: #1e293b;
 
-  --text-primary: #f0f0f0;
-  --text-secondary: #a0a0a0;
-  --text-tertiary: #757575;
+  --c-border: rgba(255, 255, 255, 0.1);
+  --c-border-strong: rgba(255, 255, 255, 0.16);
+  --c-border-focus: #f1f5f9;
 
-  --green-dim: rgba(35, 195, 67, 0.15);
-  --red-dim: rgba(245, 63, 63, 0.15);
-  
+  --c-accent: #f1f5f9;
+  --c-accent-hover: #cbd5e1;
+  --c-accent-subtle: rgba(255, 255, 255, 0.06);
+
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+
+  --bg-terminal: #0a0a0c;
+  --brand-blue-shadow: rgba(59, 130, 246, 0.2);
 }
 
 @media (prefers-color-scheme: dark) {
   html:not(.light):not([data-theme='light']) {
-    --bg-app: #121212;
-    --bg-sidebar: #1f1f1f;
-    --bg-card: #1f1f1f;
-    --bg-card-hover: #262626;
-    --bg-hover: rgba(255, 255, 255, 0.08);
-    --bg-active: rgba(51, 112, 255, 0.15);
-    --bg-input: #2b2b2b;
-    --bg-terminal: #0a0a0c;
+    --c-text-primary: #f1f5f9;
+    --c-text-secondary: #cbd5e1;
+    --c-text-tertiary: #94a3b8;
+    --c-text-disabled: #64748b;
+    --c-text-inverse: #0d0d0d;
 
-    --border: rgba(255, 255, 255, 0.1);
-    --border-subtle: rgba(255, 255, 255, 0.05);
+    --c-bg-primary: #0f172a;
+    --c-bg-secondary: #1e293b;
+    --c-bg-tertiary: #334155;
+    --c-bg-hover: rgba(255, 255, 255, 0.06);
+    --c-bg-active: rgba(255, 255, 255, 0.1);
+    --c-bg-elevated: #1e293b;
 
-    --text-primary: #f0f0f0;
-    --text-secondary: #a0a0a0;
-    --text-tertiary: #757575;
+    --c-border: rgba(255, 255, 255, 0.1);
+    --c-border-strong: rgba(255, 255, 255, 0.16);
+    --c-border-focus: #f1f5f9;
 
-    --green-dim: rgba(35, 195, 67, 0.15);
-    --red-dim: rgba(245, 63, 63, 0.15);
-    
+    --c-accent: #f1f5f9;
+    --c-accent-hover: #cbd5e1;
+    --c-accent-subtle: rgba(255, 255, 255, 0.06);
+
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+
+    --bg-terminal: #0a0a0c;
+    --brand-blue-shadow: rgba(59, 130, 246, 0.2);
   }
 }
 

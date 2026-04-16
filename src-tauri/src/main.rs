@@ -108,6 +108,7 @@ fn main() {
             ui::commands::get_logs,
             ui::commands::logout,
             ui::commands::save_token,
+            ui::commands::get_pilot_token,
             ui::commands::get_auth_challenge,
             ui::commands::start_auth_poll,
             ui::commands::set_guard_mode,

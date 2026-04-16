@@ -76,6 +76,12 @@ pub async fn exec_oneshot(
         }
     }
 
+    // PATH 注入: 让 tabpilot 打包工具 (lark-cli / rg / jq 等) 对 oneshot 可见.
+    // Windows 内部会返回 None, 不生效. 详见 services/shell/env.rs.
+    if let Some(path) = super::env::computed_path(environment) {
+        cmd.env("PATH", path);
+    }
+
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

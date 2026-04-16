@@ -1,96 +1,89 @@
 <template>
   <div class="dashboard">
-    <!-- 版本更新提示 -->
-    <UpdateBanner />
-
-    <!-- 状态卡片 -->
-    <div class="status-grid">
-      <!-- 大面积的连接状态主卡片 -->
-      <div class="card status-hero-card">
-        <div class="status-indicator">
-          <div class="status-ring" :class="statusClass"></div>
-          <div class="status-core" :class="statusClass"></div>
-        </div>
-        <div class="status-info">
-          <div class="status-label">当前运行状态：</div>
-          <div class="status-value" :class="statusClass">{{ statusText }}</div>
-          <div v-if="store.userDisplay" class="status-user">{{ store.userDisplay }}</div>
-        </div>
-        <div class="status-actions">
-          <button
-            v-if="store.serverReachable && !store.isConnected"
-            class="btn btn-primary btn-sm"
-            @click="login"
-          >
-            去授权
-          </button>
-          <button class="btn btn-ghost btn-sm btn-icon-only" @click="refresh" title="刷新">
-            <RefreshCw :size="16" />
-          </button>
-        </div>
-      </div>
-
-      <!-- 数据小指标 -->
-      <div class="card metric-card">
-        <div class="metric-header">
-          <div class="metric-icon bg-blue-subtle">
-            <Timer :size="16" class="color-blue" />
-          </div>
-          <div class="metric-label">持续运行</div>
-        </div>
-        <div class="metric-value">{{ uptimeText }}</div>
-      </div>
-
-      <div class="card metric-card">
-        <div class="metric-header">
-          <div class="metric-icon bg-green-subtle">
-            <Activity :size="16" class="color-green" />
-          </div>
-          <div class="metric-label">今日操作</div>
-        </div>
-        <div class="metric-value">{{ store.logs.length }}</div>
-      </div>
-
-      <div class="card metric-card">
-        <div class="metric-header">
-          <div class="metric-icon" :class="guardModeBg">
-            <component :is="guardModeIcon" :size="16" :class="guardModeColor" />
-          </div>
-          <div class="metric-label">安全模式</div>
-        </div>
-        <div class="metric-value text-capitalize">{{ store.guardModeText }}</div>
+    <div class="page-header">
+      <h1 class="page-title">系统概览</h1>
+      <div class="header-actions">
+        <button
+          v-if="store.serverReachable && !store.isConnected"
+          class="btn btn-primary btn-sm"
+          @click="login"
+        >
+          系统授权
+        </button>
+        <button class="btn btn-ghost btn-sm" @click="refresh">
+          刷新数据
+        </button>
       </div>
     </div>
 
-    <!-- 最近操作 -->
-    <div class="card recent-card">
-      <div class="card-title justify-between">
-        <span>最新操作追踪</span>
-        <button class="btn btn-ghost btn-sm" @click="$router.push('/logs')">查看全部</button>
+    <!-- 超大核心指标 -->
+    <div class="metrics-overview">
+      <div class="metric-super-label">核心运行指标</div>
+      <div class="metric-super-value">
+        {{ store.logs.length }} <span class="metric-super-sub">/ 今日操作</span>
       </div>
-      
+    </div>
+
+    <!-- 各维度数据网格 (无框风格) -->
+    <div class="metrics-row">
+      <div class="metric-group">
+        <div class="metric-label">运行时间</div>
+        <div class="metric-value">
+          <Timer :size="20" class="value-icon" />
+          {{ uptimeText }}
+        </div>
+      </div>
+
+      <div class="metric-group">
+        <div class="metric-label">连接状态</div>
+        <div class="metric-value" :class="statusClass">
+          <Activity :size="20" class="value-icon" />
+          {{ statusText }}
+        </div>
+      </div>
+
+      <div class="metric-group">
+        <div class="metric-label">安全模式</div>
+        <div class="metric-value">
+          <ShieldCheck :size="20" class="value-icon" />
+          <span class="text-capitalize">{{ store.guardModeText }}</span>
+        </div>
+      </div>
+
+      <div class="metric-group">
+        <div class="metric-label">当前账户</div>
+        <div class="metric-value">
+          {{ store.userDisplay || '—' }}
+        </div>
+      </div>
+    </div>
+
+    <!-- 最新操作记录 -->
+    <div class="recent-section">
+      <div class="section-header">
+        <div class="section-title">操作追踪</div>
+        <button class="btn btn-ghost btn-sm" @click="$router.push('/logs')">查看完整记录</button>
+      </div>
+
       <div v-if="store.logs.length === 0" class="empty-state">
         <Box :size="32" stroke-width="1.5" />
-        <p>暂无操作记录，Agent 尚未执行任何任务</p>
+        <div>Agent 暂无操作活动记录</div>
       </div>
 
       <div v-else class="log-list">
-        <div
-          v-for="(log, i) in store.logs"
-          :key="i"
-          class="log-row"
-        >
-          <span class="log-time mono">{{ formatLogTime(log.timestamp as number) }}</span>
-          <span class="log-badge" :class="logBadgeClass(log.tool_type as string)">{{ log.tool_type }}</span>
-          <span class="log-action mono">
-            <span class="log-action-label">{{ log.action }}</span>
-            <span v-if="formatArgs(log.args_json as string)" class="log-action-args">{{ formatArgs(log.args_json as string) }}</span>
-          </span>
-          <span class="log-decision" :class="log.guard_decision">
-            <CheckCircle2 v-if="log.guard_decision === 'allow'" :size="12" />
-            <XCircle v-else-if="log.guard_decision === 'deny'" :size="12" />
-            <Clock v-else :size="12" />
-          </span>
+        <div v-for="(log, i) in store.logs.slice(0, 8)" :key="i" class="log-row">
+          <div class="log-icon-wrap">
+            <CheckCircle2 v-if="log.guard_decision === 'allow'" :size="16" class="color-green" />
+            <XCircle v-else-if="log.guard_decision === 'deny'" :size="16" class="color-red" />
+            <Clock v-else :size="16" class="color-yellow" />
+          </div>
+          <div class="log-content">
+            <div class="log-title">{{ log.action }}</div>
+            <div class="log-desc">{{ formatArgs(log.args_json as string) }}</div>
+          </div>
+          <div class="log-meta">
+            {{ formatLogTime(log.timestamp as number) }}
+          </div>
         </div>
       </div>
     </div>
@@ -232,12 +225,15 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* 仪表盘主布局 */
 .dashboard {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  height: 100%;
+  padding: 40px 48px;
   animation: fadeIn 0.3s ease;
+  overflow-y: auto;
 }
 
 @keyframes fadeIn {
@@ -245,89 +241,93 @@ onUnmounted(() => {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* 状态网格 */
-.status-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  flex-shrink: 0;
+/* 顶部标题区 */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 40px;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
   gap: 12px;
-  margin-bottom: 12px;
 }
 
-/* 核心大卡片 */
-.status-hero-card {
-  grid-column: span 3;
+/* 数据一览 (无边框大幅数字排版) */
+.metrics-overview {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 20px;
-  background: linear-gradient(145deg, var(--bg-card), var(--bg-card-hover));
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 48px;
 }
 
-.status-indicator {
-  position: relative;
-  width: 44px;
-  height: 44px;
+.metric-super-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.metric-super-value {
+  font-size: 56px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.03em;
+  line-height: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items:baseline;
+  gap: 12px;
 }
 
-.status-ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  opacity: 0.2;
+.metric-super-sub {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--green);
+  letter-spacing: normal;
 }
 
-.status-core {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  position: relative;
-  z-index: 2;
-  box-shadow: 0 0 12px currentColor;
-  background: currentColor;
+/* 多维状态网络 */
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 32px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border);
+  margin-bottom: 48px;
 }
 
-.connected.status-ring { background: var(--green); animation: pulse-ring 2s infinite cubic-bezier(0.4, 0, 0.6, 1); }
-.connected.status-core { color: var(--green); }
-
-.reachable.status-ring { background: var(--yellow); animation: pulse-ring 2s infinite cubic-bezier(0.4, 0, 0.6, 1); }
-.reachable.status-core { color: var(--yellow); }
-
-.disconnected.status-ring { background: var(--red); opacity: 0.1; }
-.disconnected.status-core { color: var(--red); opacity: 0.8; box-shadow: none; }
-
-.reconnecting.status-ring { background: var(--yellow); animation: spin 1.5s linear infinite; border: 2px dashed var(--yellow); border-radius: 50%; }
-.reconnecting.status-core { background: var(--yellow); color: var(--yellow); }
-
-@keyframes pulse-ring {
-  0% { transform: scale(0.8); opacity: 0.4; }
-  100% { transform: scale(1.5); opacity: 0; }
+.metric-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-@keyframes spin {
-  100% { transform: rotate(360deg); }
+.metric-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
-.status-info {
-  flex: 1;
+.metric-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.status-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.status-value {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+.value-icon {
+  opacity: 0.8;
 }
 
 .status-value.connected { color: var(--text-primary); }
@@ -335,168 +335,94 @@ onUnmounted(() => {
 .status-value.disconnected { color: var(--text-tertiary); }
 .status-value.reconnecting { color: var(--yellow); }
 
-.status-user {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin-top: 2px;
-  font-family: 'SF Mono', 'Menlo', monospace;
-  letter-spacing: 0.5px;
-}
-
-.status-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.btn-icon-only {
-  padding: 4px;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* 小指标卡片 */
-.metric-card {
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.metric-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.metric-icon {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.bg-blue-subtle { background: rgba(51, 112, 255, 0.1); }
-.bg-green-subtle { background: var(--green-dim); }
-.bg-yellow-subtle { background: var(--yellow-dim); }
-
-.color-blue { color: var(--blue); }
-.color-green { color: var(--green); }
-.color-yellow { color: var(--yellow); }
-
-.metric-label {
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.metric-value {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-}
-
-.text-capitalize { text-transform: capitalize; }
-
-/* 最近操作 — 紧凑一行 */
-.recent-card {
-  padding: 16px;
+/* 最近操作 */
+.recent-section {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 280px;
-  margin-bottom: 0px;
 }
 
-.empty-state {
+.section-header {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 24px 0;
-  color: var(--text-tertiary);
-  gap: 12px;
-  font-size: 13px;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .log-list {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  gap: 1px;
 }
 
 .log-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  transition: background 0.15s;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  gap: 16px;
 }
 
-.log-row:hover {
-  background: var(--bg-hover);
+.log-row:last-child {
+  border-bottom: none;
 }
 
-.log-time {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  flex-shrink: 0;
-  width: 60px;
-}
-
-.log-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  flex-shrink: 0;
-}
-
-.badge-blue { background: rgba(51, 112, 255, 0.1); color: var(--blue); }
-.badge-purple { background: rgba(147, 51, 234, 0.1); color: #9333ea; }
-.badge-teal { background: rgba(20, 184, 166, 0.1); color: #14b8a6; }
-.badge-orange { background: rgba(249, 115, 22, 0.1); color: #f97316; }
-
-.log-action {
-  flex: 1;
-  font-size: 12px;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.log-action-label {
-  font-weight: 600;
-  margin-right: 6px;
-}
-
-.log-action-args {
-  color: var(--text-tertiary);
-  font-weight: 400;
-}
-
-.log-decision {
-  flex-shrink: 0;
+.log-icon-wrap {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
   display: flex;
   align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
 }
 
-.log-decision.allow { color: var(--green); }
-.log-decision.deny { color: var(--red); }
-.log-decision.confirm { color: var(--yellow); }
+.log-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.log-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.log-desc {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 600px;
+}
+
+.log-meta {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.empty-state {
+  padding: 40px 0;
+  color: var(--text-tertiary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.color-green { color: var(--green); }
+.color-red { color: var(--red); }
+.color-yellow { color: var(--yellow); }
 </style>

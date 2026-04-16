@@ -1,0 +1,180 @@
+/**
+ * Engine V3 Copilot 设计系统
+ * 
+ * 视觉语言：黑白灰为主，品牌色仅用于关键交互
+ * 参考：Linear / Claude / Notion
+ */
+
+:root {
+  /* ===== 色彩系统 ===== */
+  /* 文字层级 */
+  --c-text-primary: #0d0d0d;
+  --c-text-secondary: #5c5c5c;
+  --c-text-tertiary: #999;
+  --c-text-disabled: #bbb;
+  --c-text-inverse: #fff;
+
+  /* 背景层级 */
+  --c-bg-primary: #fff;
+  --c-bg-secondary: #fafafa;
+  --c-bg-tertiary: #f5f5f5;
+  --c-bg-hover: rgba(0, 0, 0, 0.04);
+  --c-bg-active: rgba(0, 0, 0, 0.06);
+  --c-bg-elevated: #fff;
+
+  /* 边框 */
+  --c-border: rgba(0, 0, 0, 0.08);
+  --c-border-strong: rgba(0, 0, 0, 0.12);
+  --c-border-focus: #0d0d0d;
+
+  /* 品牌色 - 仅用于主按钮和链接 */
+  --c-accent: #0d0d0d;
+  --c-accent-hover: #333;
+  --c-accent-subtle: rgba(0, 0, 0, 0.05);
+
+  /* 语义色 - 极度克制使用 */
+  --c-success: #16a34a;
+  --c-warning: #d97706;
+  --c-danger: #dc2626;
+  --c-info: #2563eb;
+
+  /* ===== 字体系统 ===== */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Cascadia Code", "Menlo", monospace;
+
+  /* 字号 */
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+
+  /* 行高 */
+  --leading-tight: 1.3;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.7;
+
+  /* 字重 */
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  /* ===== 间距系统 ===== */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ===== 圆角 ===== */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* ===== 阴影 - 极度克制 ===== */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+
+  /* ===== 动效 ===== */
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --easing: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+
+/* ===== GitHub Alerts ===== */
+.gh-alert {
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  color: var(--c-text-primary);
+  border-left: 4px solid var(--c-border-strong);
+  background: var(--c-bg-secondary);
+  border-radius: 0 8px 8px 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.gh-alert p {
+  margin-top: 0 !important;
+  margin-bottom: 8px !important;
+}
+.gh-alert p:last-child {
+  margin-bottom: 0 !important;
+}
+.gh-alert-title {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  font-weight: 600;
+  font-size: 14px;
+}
+.gh-alert-note {
+  border-left-color: #0969da;
+}
+.gh-alert-note .gh-alert-title {
+  color: #0969da;
+}
+.gh-alert-tip {
+  border-left-color: #1a7f37;
+}
+.gh-alert-tip .gh-alert-title {
+  color: #1a7f37;
+}
+.gh-alert-important {
+  border-left-color: #8250df;
+}
+.gh-alert-important .gh-alert-title {
+  color: #8250df;
+}
+.gh-alert-warning {
+  border-left-color: #9a6700;
+}
+.gh-alert-warning .gh-alert-title {
+  color: #9a6700;
+}
+.gh-alert-caution {
+  border-left-color: #cf222e;
+}
+.gh-alert-caution .gh-alert-title {
+  color: #cf222e;
+}
+
+/* ===== Mermaid Placeholder ===== */
+.mermaid-placeholder {
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  margin: 16px 0;
+  text-align: left;
+}
+.mermaid-placeholder code {
+  display: block;
+  margin-top: 12px;
+  padding: 12px;
+  background: #fff !important;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  max-height: 250px;
+  overflow-y: auto;
+  color: #475569 !important;
+}
+
+/* ===== Official Mermaid Container ===== */
+.mermaid {
+  background: white;
+  margin: 16px 0;
+  border-radius: 8px;
+  overflow-x: auto;
+  text-align: center;
+  border: 1px solid var(--c-border);
+}

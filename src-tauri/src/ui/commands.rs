@@ -123,6 +123,18 @@ pub async fn save_token(
     Ok("Token 已保存".to_string())
 }
 
+/// 获取当前 Pilot Token (供 Webview 发起 /copilot/chat 等 SSE 请求时使用)
+#[tauri::command]
+pub async fn get_pilot_token(state: State<'_, AppState>) -> Result<String, String> {
+    Ok(state
+        .auth
+        .read()
+        .await
+        .get_token()
+        .map(|s| s.to_string())
+        .unwrap_or_default())
+}
+
 /// 获取 auth challenge
 #[tauri::command]
 pub async fn get_auth_challenge(state: State<'_, AppState>) -> Result<String, String> {

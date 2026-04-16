@@ -8,7 +8,6 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use super::collector::OutputCollector;
-use crate::infra::tools::ToolsManager;
 
 const MAX_COMMAND_HISTORY: usize = 20;
 
@@ -111,23 +110,10 @@ impl ShellSession {
             cmd.env("TERM", "xterm-256color");
         }
 
-        // PATH 注入: tools 目录中的 CLI 工具
-        // Windows 完全跳过 — PyInstaller 打包工具的 DLL 会与系统 DLL 冲突
-        // 导致 cmd.exe 0xc0000142 启动失败
-        if !cfg!(target_os = "windows") {
-            let tools_mgr = ToolsManager::default();
-            let tools_dir = tools_mgr.tools_dir().to_path_buf();
-            if tools_dir.exists() {
-                let dir_strs: Vec<String> = if crate::infra::platform::should_include_archive_tool_paths() {
-                    // 注入所有 path_dirs (tools 根 + archive 子目录)
-                    tools_mgr.path_dirs().into_iter().map(|d| d.display().to_string()).collect()
-                } else {
-                    vec![tools_dir.display().to_string()]
-                };
-                let refs: Vec<&str> = dir_strs.iter().map(|s| s.as_str()).collect();
-                let new_path = crate::infra::platform::prepend_path(&refs);
-                cmd.env("PATH", new_path);
-            }
+        // PATH 注入: tools 目录中的 CLI 工具 (详见 services/shell/env.rs)
+        // Windows / tools_dir 未就绪时返回 None, 不生效
+        if let Some(path) = super::env::computed_path(environment) {
+            cmd.env("PATH", path);
         }
 
         let mut child = pair

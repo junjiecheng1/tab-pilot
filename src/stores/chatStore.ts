@@ -36,6 +36,7 @@ import {
   replayEvents,
   type ReducerState,
 } from '../services/copilot/eventReducer';
+import { extractArgsSummary } from '../services/copilot/events';
 import type { WireEvent } from '../services/copilot/sse-parser';
 import type {
   ChatTurn,
@@ -263,87 +264,237 @@ export const useChatStore = defineStore('chat', () => {
     );
   }
 
-  // ── 历史恢复 ──
-  /** 把后端 /messages 返回的消息列表转成 ChatTurn[] (写入 historyTurns) */
-  function restoreToTurns(messages: any[]): ChatTurn[] {
+  // ── 历史恢复 (对齐 PC AssistantMessage.vue 的渲染逻辑) ──
+  /** 把后端 /messages 返回的消息列表转成 ChatTurn[] */
+  function restoreToTurns(rawMessages: any[]): ChatTurn[] {
     const result: ChatTurn[] = [];
-    let cur: ChatTurn | null = null;
+    let currentTurn: ChatTurn | null = null;
 
-    for (const msg of messages) {
+    for (const msg of rawMessages) {
       if (msg.role === 'user') {
         const textContent = msg.contents?.find((c: any) => c.type === 'text');
         const text = typeof textContent?.data === 'string'
           ? textContent.data
           : textContent?.data?.markdown || '';
-        cur = emptyTurn(text);
-        cur.status = 'done';
-        result.push(cur);
+        currentTurn = emptyTurn(text);
+        currentTurn.status = 'done';
+        result.push(currentTurn);
       } else if (msg.role === 'assistant') {
-        if (!cur) {
-          cur = emptyTurn('');
-          cur.status = 'done';
-          result.push(cur);
+        if (!currentTurn) {
+          currentTurn = emptyTurn('');
+          currentTurn.status = 'done';
+          result.push(currentTurn);
         }
+
+        // 1. 错误信息
         const errorData = msg.contents?.find((c: any) => c.type === 'error')?.data;
         if (errorData?.message) {
-          cur.status = 'error';
-          cur.error = { code: 'HISTORY', message: errorData.message };
+          currentTurn.status = 'error';
+          currentTurn.error = { code: 'HISTORY', message: errorData.message };
         }
+
+        // 2. 主文本 (contents[type=text] → turn.content)
+        const textBlock = msg.contents?.find((c: any) => c.type === 'text');
+        if (textBlock) {
+          const md = typeof textBlock.data === 'string'
+            ? textBlock.data
+            : textBlock.data?.markdown;
+          if (md) {
+            currentTurn.content = (currentTurn.content ? currentTurn.content + '\n\n' : '') + md;
+          }
+        }
+
+        // 3. 时间线步骤 — 对齐 PC AssistantMessage.vue 的 collectIntoSection 逻辑
         const stepsData = msg.contents?.find((c: any) => c.type === 'steps')?.data;
         if (Array.isArray(stepsData)) {
+          // 预扫描: 是否包含 message(result) — 有则 narration 跳过 (PC 同逻辑)
+          const hasMessageResult = stepsData.some(
+            (s: any) => s.type === 'tool_activity' && s.name === 'message' && s.args?.mode === 'result',
+          );
+
           for (const s of stepsData) {
+            // ── message 工具分流 (对齐 PC L268-L276) ──
+            if (s.type === 'tool_activity' && s.name === 'message') {
+              const mode = s.args?.mode;
+              if (mode === 'result') {
+                // result 模式 → 提取 args.message 作为最终 Markdown 内容
+                // 不进时间线 (和 PC 完全一致)
+                const msgText = typeof s.args?.message === 'string' ? s.args.message : '';
+                if (msgText) {
+                  currentTurn.content = (currentTurn.content ? currentTurn.content + '\n\n' : '') + msgText;
+                }
+                continue;
+              }
+              // info 模式 → 转成 narration (过程独白)
+              const infoText = typeof s.args?.message === 'string' ? s.args.message : '';
+              if (infoText.trim()) {
+                currentTurn.steps.push({
+                  id: genId(),
+                  type: 'narration',
+                  text: infoText,
+                  startedAt: Date.now(),
+                });
+              }
+              continue;
+            }
+
+            // ── todo_write 跳过 (PC L257-L263 跳过同理) ──
+            if (s.type === 'tool_activity' && s.name === 'todo_write') {
+              continue;
+            }
+
+            // ── 普通 tool_activity ──
             if (s.type === 'tool_activity') {
-              cur.steps.push({
-                id: String(s.id || genId()),
+              const toolStepId = String(s.id || genId());
+              currentTurn.steps.push({
+                id: toolStepId,
                 type: 'tool',
-                callId: String(s.id || genId()),
+                callId: toolStepId,
                 name: s.name || 'tool',
                 displayName: s.display_name,
                 status: s.status === 'completed' ? 'done' : s.status === 'failed' ? 'error' : 'cancelled',
-                summary: s.summary || s.result?.summary || s.result?.formatted || s.result?.display?.title || s.result?.data?.brief || '',
+                summary: s.summary || s.result?.summary || s.result?.formatted
+                  || s.result?.display?.title || s.result?.data?.brief
+                  || extractArgsSummary(s.name || '', s.args) || '',
                 args: s.args,
                 errorMessage: s.error,
                 durationMs: s.duration_ms,
                 startedAt: Date.now(),
               });
-            } else if (s.type === 'narration' || s.type === 'content') {
+
+              // ask/confirm 工具: 从 interaction 字段恢复 human_ask block
+              // 对齐 PC ToolActivity.vue 的 humanAskData computed
+              if (s.interaction && typeof s.interaction === 'object') {
+                const ix = s.interaction;
+                const questions = Array.isArray(ix.questions) ? ix.questions : [];
+                const response = ix.response && typeof ix.response === 'object' ? ix.response : {};
+                // 构造和 SSE human_ask 事件一致的 payload
+                const askPayload: Record<string, unknown> = {
+                  tool_call_id: toolStepId,
+                  question: typeof ix.prompt === 'string' ? ix.prompt : questions[0]?.question || '',
+                  question_type: questions[0]?.question_type || (ix.kind === 'confirm' ? 'confirm' : 'open'),
+                  questions,
+                  options: questions[0]?.options,
+                  answered: Boolean(ix.answered),
+                  answer_preview: (() => {
+                    // 提取用户回答的预览文本
+                    if (response.answer_value) return String(response.answer_value);
+                    if (Array.isArray(response.answer_values)) return (response.answer_values as string[]).join('、');
+                    if (Array.isArray(response.answers)) {
+                      const first = (response.answers as any[])[0];
+                      return first?.answer_value || first?.answer_values?.join('、') || '';
+                    }
+                    return '';
+                  })(),
+                };
+                currentTurn.blocks.push({
+                  id: genId(),
+                  blockType: 'human_ask',
+                  payload: askPayload,
+                  dedupeKey: `human_ask:${toolStepId}`,
+                });
+              }
+              continue;
+            }
+
+            // ── narration / content ──
+            if (s.type === 'narration' || s.type === 'content') {
+              // PC: 如果有 message(result) 则 narration 跳过 (已在 content 展示)
+              if (hasMessageResult) continue;
               if (s.text) {
-                cur.steps.push({
+                currentTurn.steps.push({
                   id: genId(),
                   type: 'narration',
                   text: s.text,
                   startedAt: Date.now(),
                 });
               }
-            } else if (s.type === 'subagent') {
-              cur.steps.push({
+              continue;
+            }
+
+            // ── subagent (递归恢复内部 steps) ──
+            if (s.type === 'subagent') {
+              const innerSteps: Array<import('../services/copilot/types').ToolStep | import('../services/copilot/types').NarrationStep> = [];
+              if (Array.isArray(s.steps)) {
+                for (const inner of s.steps) {
+                  if (inner.type === 'tool_activity') {
+                    // subagent 内部的 message tool 也做同样分流
+                    if (inner.name === 'message') {
+                      if (inner.args?.mode === 'result') {
+                        const t = typeof inner.args?.message === 'string' ? inner.args.message : '';
+                        if (t) currentTurn.content = (currentTurn.content ? currentTurn.content + '\n\n' : '') + t;
+                      } else {
+                        const t = typeof inner.args?.message === 'string' ? inner.args.message : '';
+                        if (t.trim()) innerSteps.push({ id: genId(), type: 'narration', text: t, startedAt: Date.now() });
+                      }
+                      continue;
+                    }
+                    if (inner.name === 'todo_write') continue;
+                    innerSteps.push({
+                      id: String(inner.id || genId()),
+                      type: 'tool',
+                      callId: String(inner.id || genId()),
+                      name: inner.name || 'tool',
+                      displayName: inner.display_name,
+                      status: inner.status === 'completed' ? 'done' : inner.status === 'failed' ? 'error' : 'cancelled',
+                      summary: inner.summary || inner.result?.summary || extractArgsSummary(inner.name || '', inner.args) || '',
+                      args: inner.args,
+                      errorMessage: inner.error,
+                      durationMs: inner.duration_ms,
+                      startedAt: Date.now(),
+                    });
+                  } else if (inner.type === 'narration' || inner.type === 'content') {
+                    if (inner.text) {
+                      innerSteps.push({ id: genId(), type: 'narration', text: inner.text, startedAt: Date.now() });
+                    }
+                  }
+                }
+              }
+              currentTurn.steps.push({
                 id: s.task_id || s.name || genId(),
                 type: 'subagent',
                 taskId: s.task_id || s.name || genId(),
                 name: s.name || 'subagent',
                 displayName: s.display_name || s.name,
                 description: s.description,
-                status: s.status === 'failed' ? 'error' : 'done',
+                status: s.status === 'executing' ? 'cancelled' : s.status === 'failed' ? 'error' : 'done',
                 durationMs: s.duration_ms,
                 errorMessage: s.error,
-                steps: [],
+                steps: innerSteps,
                 startedAt: Date.now(),
               });
-            } else if (s.type === 'block') {
+              continue;
+            }
+
+            // ── block ──
+            if (s.type === 'block') {
               const b = s.block;
               if (b) {
                 const blockType = b.block_type || b.type;
                 const payload = b.data || b.payload;
-                cur.blocks.push({
+                currentTurn.blocks.push({
                   id: genId(),
                   blockType,
                   payload,
                   dedupeKey: String(b.id || genId()),
                 });
-                if (blockType === 'message') {
-                  const md = payload?.markdown;
-                  if (md) cur.content = md;
-                }
+              }
+            }
+          }
+
+          // PC contentSteps fallback: 如果没有 content 也没有 message(result)，
+          // 但有 narration 且无 tool → 用最后一个 narration 作为 content
+          if (!currentTurn.content) {
+            const hasTools = stepsData.some((s: any) => s.type === 'tool_activity' && s.name !== 'message' && s.name !== 'todo_write');
+            if (!hasTools) {
+              const lastNarration = [...stepsData].reverse().find((s: any) => s.type === 'narration' || s.type === 'content');
+              if (lastNarration?.text) {
+                currentTurn.content = lastNarration.text;
+                // 同时从 steps 里移除这个 narration (避免重复展示)
+                const idx = currentTurn.steps.findIndex(
+                  (st) => st.type === 'narration' && (st as any).text === lastNarration.text,
+                );
+                if (idx >= 0) currentTurn.steps.splice(idx, 1);
               }
             }
           }
@@ -364,7 +515,8 @@ export const useChatStore = defineStore('chat', () => {
       // 任务未跑 → 拉历史 messages 写 historyTurns; 清 live (没有 in-flight)
       const res = await copilot.getMessages(httpBase.value, currentSessionId.value, 50);
       if (res && res.messages && res.messages.length > 0) {
-        historyTurns.value = restoreToTurns(res.messages.slice().reverse());
+        // 后端 /messages 返回正序 (旧→新)，直接用，不 reverse
+        historyTurns.value = restoreToTurns(res.messages);
         resetLive();
       }
       return;

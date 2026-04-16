@@ -1,7 +1,9 @@
 import { createApp } from "vue";
 import { createRouter, createWebHashHistory } from "vue-router";
 import App from "./App.vue";
+import "./styles/copilot-tokens.css";
 import "./styles/index.css";
+import "highlight.js/styles/github.css";
 
 // 恢复主题设置
 const theme = localStorage.getItem('theme-preference');
@@ -17,6 +19,11 @@ const router = createRouter({
       path: "/",
       name: "dashboard",
       component: () => import("./views/DashboardView.vue"),
+    },
+    {
+      path: "/run",
+      name: "run",
+      component: () => import("./views/RunView.vue"),
     },
     {
       path: "/security",
