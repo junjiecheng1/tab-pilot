@@ -7,6 +7,12 @@ use regex::Regex;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+/// 默认安全模式 — store 里无 `guard_mode` 时的兜底值.
+///
+/// **后端单一数据源**: 前端通过 `get_status` 接口拿到当前 `guard_mode`,
+/// 不再在前端重复硬编码默认值.
+pub const DEFAULT_GUARD_MODE: &str = "trust";
+
 /// 安全判断结果
 #[derive(Debug, Clone, PartialEq)]
 pub enum GuardDecision {

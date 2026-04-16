@@ -25,7 +25,8 @@ export const usePilotStore = defineStore('pilot', () => {
   const serverReachable = computed(() => status.value?.server_reachable ?? false);
   const wsState = computed(() => status.value?.ws_state ?? 'disconnected');
   const uptime = computed(() => status.value?.uptime ?? 0);
-  const guardMode = computed(() => status.value?.guard_mode ?? 'standard');
+  // guard_mode 由后端 get_status 接口权威返回; 未加载时空串, UI 走"加载中"态.
+  const guardMode = computed(() => status.value?.guard_mode ?? '');
   const guardModeText = computed(() => GUARD_MODE_LABELS[guardMode.value] || guardMode.value);
   const guardModeInfo = computed(() => GUARD_MODES.find(m => m.value === guardMode.value));
   const workspace = computed(() => status.value?.workspace ?? '');

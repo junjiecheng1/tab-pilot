@@ -56,7 +56,8 @@ export async function getStatus(): Promise<StatusResponse> {
     ws_state: 'unavailable',
     server_reachable: false,
     uptime: 0,
-    guard_mode: 'standard',
+    // invoke 失败才会走到这里 (如 dev 无 Tauri). 真实值由后端 get_status 返回.
+    guard_mode: '',
     workspace: '',
     server_url: '',
     version: 'unknown',

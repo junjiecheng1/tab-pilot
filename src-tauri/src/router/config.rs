@@ -76,7 +76,7 @@ impl PilotConfig {
             http_url,
             data_dir,
             workspace,
-            guard_mode: "standard".to_string(),
+            guard_mode: crate::infra::guard::DEFAULT_GUARD_MODE.to_string(),
             shell_timeout: 30,
             shell_cmd: crate::infra::platform::shell_exec_prefix(),
             output_max_size: 50 * 1024,

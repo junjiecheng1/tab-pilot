@@ -97,14 +97,14 @@ import type { GuardModeInfo } from '../constants/guardModes';
 const store = usePilotStore();
 const modes = GUARD_MODES;
 
-const currentMode = ref(store.guardMode || 'standard');
+const currentMode = ref(store.guardMode);
 const rememberedCommands = ref<string[]>([]);
 const protectedPaths = ref<string[]>([]);
 
 // 初始化: store 已有 guard_mode, 只需加载其他数据
 onMounted(async () => {
   await store.fetchStatus(); // 带缓存
-  currentMode.value = store.guardMode || 'standard';
+  currentMode.value = store.guardMode;
   try {
     const [remembered, paths] = await Promise.all([
       getRemembered(),
